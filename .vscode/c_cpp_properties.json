@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/include",
+                "/usr/local/include",
+                "${workspaceFolder}/include/*"
+            ],
+            "defines": [
+                "MPFR_USE_NO_MACRO",
+                "MPFR_USE_INTMAX_T"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64"
+            
+        }
+    ],
+    
+    "version": 4
+}
