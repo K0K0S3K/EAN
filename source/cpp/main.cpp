@@ -1,7 +1,7 @@
 #include <iostream>
-#include "../include/Interval.h"
+#include "../../include/Interval.h"
 #include <mpfr.h>
-#include "../include/mpreal.h"
+#include "../../include/mpreal.h"
 
 using namespace std;
 using namespace interval_arithmetic;

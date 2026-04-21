@@ -1,0 +1,32 @@
+# Ignore everything
+*
+
+# But allow directories so exceptions work
+!*/
+
+# Keep this gitignore tracked
+!.gitignore
+
+# Allow .vscode directory and all its contents
+!.vscode/
+!.vscode/**
+
+# Allow selected file types (both lower and upper case)
+!*.md
+!*.MD
+!*.cpp
+!*.CPP
+!*.h
+!*.H
+!*.py
+!*.PY
+
+# Ignoruj środowisko wirtualne
+ean/
+venv/
+.venv/
+env/
+
+# Opcjonalnie ignoruj cache Pythona
+__pycache__/
+*.py[cod]
