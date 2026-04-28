@@ -6,6 +6,35 @@
 using namespace std;
 using namespace interval_arithmetic;
 
+
+int main()
+{
+
+    string arithmetic;
+    string counting;
+    string input_type;
+    string polynomial;
+
+    cout << "RUNNING" << endl;
+
+    while (true)
+    {
+        getline(cin, arithmetic);
+        getline(cin, counting);
+        getline(cin, input_type);
+        getline(cin, polynomial);
+
+        cout << "DZIAŁA" << endl;
+    }
+
+
+}
+
+
+
+
+
+/*
 int main() {
     // 1. Inicjalizacja biblioteki dla typu mpreal (biblioteka MPFR)
     // To ustawia domyślną precyzję zdefiniowaną w Interval.h
@@ -41,4 +70,4 @@ int main() {
     cout << "sin(X) = [" << left << ", " << right << "]" << endl;
 
     return 0;
-}
+}*/
