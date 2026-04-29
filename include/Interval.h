@@ -1,13 +1,23 @@
 /*
  * Interval.h
  *
- *  Created on: 27 lut 2021
- *      Author: tomhof
+ * Created on: 27 lut 2021
+ * Author: tomhof
+ *
+ * Dokumentacja i analiza działania:
+ * Plik definiuje szablonową bibliotekę do obliczeń w arytmetyce przedziałowej 
+ * (klasycznej oraz skierowanej - Kaucher'a). Głównym założeniem biblioteki jest 
+ * zagwarantowanie, że rzeczywisty wynik operacji zawsze znajduje się wewnątrz 
+ * zwracanego przedziału. Osiąga się to poprzez ścisłą kontrolę kierunku 
+ * zaokrągleń zmiennoprzecinkowych (w dół dla lewego krańca, w górę dla prawego).
+ * Wspiera typy wbudowane (float, double, long double) oraz typy o dowolnej
+ * precyzji (mpreal z biblioteki MPFR).
  */
 
 #ifndef INTERVAL_H_
 #define INTERVAL_H_
 
+// Zabezpieczenia dla biblioteki MPFR, aby unikać konfliktów makr.
 #ifndef MPFR_USE_NO_MACRO
   #define MPFR_USE_NO_MACRO
 #endif
@@ -19,86 +29,112 @@
 #include <string>
 #include <sstream>
 #include <stdexcept>
-#include <fenv.h>
+#include <fenv.h>     // Krytyczne: dostarcza fesetround() do zmiany kierunku zaokrągleń FPU
 #include <stdlib.h>
 #include <stdint.h>
 #include <cmath>
-#include <mpfr.h>
+#include <mpfr.h>     // GNU Multiple Precision Floating-Point Reliably
 #include <boost/lexical_cast.hpp>
 #include <string.h>
 #include <iomanip>
 #include <fstream>
 #include <float.h>
 #include <typeinfo>
-#include "mpreal.h"
+#include "mpreal.h"   // Wrapper C++ dla MPFR
 
 using namespace std;
 using namespace mpfr;
 
 namespace interval_arithmetic {
 
+/**
+ * @brief Precyzja w bitach dla poszczególnych typów danych.
+ * Używane głównie do konfiguracji wewnętrznej biblioteki MPFR.
+ */
 enum IAPrecision {
 	LONGDOUBLE_PREC = 63, DOUBLE_PREC = 53, FLOAT_PREC = 32, MPREAL_PREC = 40
 };
 
+/**
+ * @brief Liczba cyfr znaczących używana podczas rzutowania przedziału na ciąg znaków (string).
+ */
 enum IAOutDigits {
 	LONGDOUBLE_DIGITS = 17, DOUBLE_DIGITS = 16, FLOAT_DIGITS = 7
 };
 
+/**
+ * @brief Tryb działania arytmetyki przedziałowej.
+ * - PINT_MODE (Proper Interval): Standardowa arytmetyka, przedziały [a, b] gdzie a <= b.
+ * - DINT_MODE (Directed Interval): Skierowana arytmetyka Kauchera, dopuszcza przedziały niewłaściwe a > b.
+ */
 enum IAMode {
 	DINT_MODE, PINT_MODE
 };
 
+// Deklaracja zapowiadająca (forward declaration) głównej klasy
 template<typename T> class Interval;
 
+// --- ZAPOWIEDZI FUNKCJI GLOBALNYCH ---
+// Pomocnicze funkcje do wczytywania przedziałów z ciągów znaków
 template<typename T> Interval<T> IntRead(const string &sa);
 template<typename T> T LeftRead(const string &sa);
 template<typename T> T RightRead(const string &sa);
+
+// Obliczanie szerokości przedziału
 template<typename T> T DIntWidth(const Interval<T> &x);
 template<typename T> T IntWidth(const Interval<T> &x);
-template<typename T> Interval<T> IAdd(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> ISub(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> IDiv(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> IMul(const Interval<T> &x,
-		const Interval<T> &y);
+
+// --- WŁAŚCIWA ARYTMETYKA PRZEDZIAŁOWA (I*) ---
+template<typename T> Interval<T> IAdd(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> ISub(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> IDiv(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> IMul(const Interval<T> &x, const Interval<T> &y);
 template<typename T> Interval<T> ISin(const Interval<T> &x);
 template<typename T> Interval<T> ICos(const Interval<T> &x);
 template<typename T> Interval<T> IExp(const Interval<T> &x);
 
-template<typename T> Interval<T> DIAdd(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> DISub(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> DIDiv(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> DIMul(const Interval<T> &x,
-		const Interval<T> &y);
+// --- SKIEROWANA ARYTMETYKA PRZEDZIAŁOWA KAUCHERA (DI*) ---
+template<typename T> Interval<T> DIAdd(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> DISub(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> DIDiv(const Interval<T> &x, const Interval<T> &y);
+template<typename T> Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y);
 template<typename T> Interval<T> DISin(const Interval<T> &x);
 template<typename T> Interval<T> DICos(const Interval<T> &x);
 template<typename T> Interval<T> DIExp(const Interval<T> &x);
-template<typename T> Interval<T> Hull(const Interval<T> &x,
-		const Interval<T> &y);
-template<typename T> Interval<T> IAbs(const Interval<T> &x);
 
+// Narzędzia
+template<typename T> Interval<T> Hull(const Interval<T> &x, const Interval<T> &y); // Otoczka przedziałowa
+template<typename T> Interval<T> IAbs(const Interval<T> &x); // Wartość bezwzględna z przedziału
+
+/**
+ * @brief Globalna funkcja do bezpiecznej zmiany trybu zaokrąglania procesora (FPU).
+ * Gwarantuje, że wyniki obliczeń zmiennoprzecinkowych odpowiednio zaniżą/zawyżą wynik.
+ */
 template<typename T> int SetRounding(int rounding);
 template<> Interval<mpreal> IntRead(const string &sa);
 
+/**
+ * @class Interval
+ * @brief Główna klasa reprezentująca przedział matematyczny [a, b].
+ */
 template<typename T> class Interval {
 private:
-	static IAPrecision precision;
-	static IAOutDigits outdigits;
+	static IAPrecision precision; // Aktualnie ustawiona precyzja
+	static IAOutDigits outdigits; // Cyfry do wyświetlania
 
 public:
-	static IAMode mode;
-	T a;
-	T b;
+	static IAMode mode; // Tryb działania (PINT / DINT), domyślnie współdzielony dla całej aplikacji
+	
+	T a; // Lewy kraniec przedziału (infimum / dolne ograniczenie)
+	T b; // Prawy kraniec przedziału (supremum / górne ograniczenie)
+	
+	// Konstruktory i destryktor
 	Interval();
 	Interval(Interval const &copy);
 	Interval(T a, T b);
 	virtual ~Interval();
+	
+	// Operatory przypisania i operatory arytmetyczne
 	Interval& operator=(const Interval<T> i);
 	Interval operator+(const Interval<T> &i);
 	Interval operator-(const Interval<T> &i);
@@ -106,19 +142,40 @@ public:
 	Interval operator*(const long double &l);
 	Interval operator*(const int &i);
 	Interval operator/(const Interval<T> &i);
+	
+	/**
+	 * @brief Projekcja rzutuje przedział niewłaściwy (a > b) na właściwy (a <= b) zamieniając krańce.
+	 */
 	Interval Projection();
+	
+	/**
+	 * @brief Tworzy przedział przeciwny: [-a, -b]. Zauważ, że zachowuje on kolejność (nie jest to standardowa arytmetyka ujemna [-b, -a]).
+	 */
 	Interval Opposite();
+	
+	/**
+	 * @brief Operator dualności w arytmetyce Kauchera. Zwraca [b, a]. 
+	 * Pozwala na rozwiązywanie niektórych równań przedziałowych.
+	 */
 	Interval Dual();
+	
+	/**
+	 * @brief Zwraca przedział odwrotny 1/X z rygorystycznym zaokrąglaniem, dobierając najszerszy możliwy przedział w trybie DINT.
+	 */
 	Interval Inverse();
-	T Mid();
-	T GetWidth();
+	
+	T Mid(); // Środek przedziału
+	T GetWidth(); // Szerokość przedziału (odległość od a do b)
+	
 	static void Initialize();
+	
+	// Predefiniowane stałe przedziałowe (gwarantują, że stała leży ściśle wewnątrz wygenerowanego przedziału)
 	static Interval<T> ISqr2();
 	static Interval<T> ISqr3();
 	static Interval<T> IPi();
-	static void SetMode(IAMode m) {
-		mode = m;
-	}
+	
+	// Settery i gettery statyczne
+	static void SetMode(IAMode m) { mode = m; }
 	static IAMode GetMode();
 	static void SetPrecision(IAPrecision p);
 	static IAPrecision GetPrecision();
@@ -126,8 +183,12 @@ public:
 	static IAOutDigits GetOutDigits();
 	static T GetEpsilon();
 
+	/**
+	 * @brief Formatuje oba krańce przedziału do pary stringów.
+	 */
 	void IEndsToStrings(string &left, string &right);
 
+	// Przyjaźnie ułatwiają dostęp do struktury wenętrznej wolnym funkcjom
 	friend T DIntWidth<T>(const Interval &x);
 	friend T IntWidth<T>(const Interval &x);
 	friend Interval IAdd<T>(const Interval &x, const Interval &y);
@@ -154,6 +215,8 @@ public:
 
 	friend int SetRounding<T>(int rounding);
 };
+
+// --- IMPLEMENTACJE KONSTRUKTORÓW I METOD KLASY ---
 
 template<typename T>
 inline Interval<T>::~Interval() {
@@ -182,21 +245,15 @@ inline IAMode Interval<T>::GetMode() {
 	return Interval<T>::mode;
 }
 
-//template<>
-//inline int SetRounding<mpreal>(int rounding) {
-//	if (rounding == FE_UPWARD) {
-//		mpreal::set_default_rnd(MPFR_RNDU);
-//	} else if (rounding == FE_DOWNWARD) {
-//		mpreal::set_default_rnd(MPFR_RNDD);
-//	} else {
-//		mpreal::set_default_rnd(MPFR_RNDN);
-//	}
-//	return rounding;
-//}
-
+/**
+ * @brief Ustawia kierunek zaokrągleń dla sprzętowego FPU.
+ * Jest to najważniejsza funkcja utrzymująca spójność przedziałową -
+ * zapobiega utracie dokładności, która mogłaby spowodować wyrzucenie
+ * poprawnego wyniku poza granice przedziału.
+ */
 template<typename T>
 int SetRounding(int rounding) {
-	fesetround(rounding);
+	fesetround(rounding); // Oczekuje makr standardu C: FE_DOWNWARD, FE_UPWARD, FE_TONEAREST
 	return rounding;
 }
 
@@ -220,7 +277,7 @@ inline IAPrecision Interval<T>::GetPrecision() {
 
 template<typename T>
 inline void Interval<T>::SetOutDigits(IAOutDigits o) {
-	Interval<T>::outdigits = LONGDOUBLE_DIGITS;
+	Interval<T>::outdigits = LONGDOUBLE_DIGITS; // BUG?: Twarde zakodowanie pomimo argumentu 'o'.
 }
 
 template<typename T>
@@ -233,11 +290,19 @@ inline T Interval<T>::GetEpsilon() {
 	return std::numeric_limits<T>::epsilon();
 }
 
+/**
+ * @brief Czyta przedział ze zmiennej tekstowej, uwzględniając zaokrąglenia.
+ * Prawidłowo konwertuje wprowadzony tekst na reprezentację zmiennoprzecinkową, 
+ * kierując lewy kraniec w dół, a prawy w górę, zabezpieczając się przed błędami 
+ * konwersji systemu dziesiętnego na binarny.
+ */
 template<typename T>
 inline Interval<T> IntRead(const string &sa) {
 	Interval<T> r;
 	mpfr_t rop;
 	mpfr_init2(rop, Interval<T>::precision);
+	
+	// Parsowanie dla lewego krańca - celowo zaniżamy dokładność (RNDD - Round Down)
 	mpfr_set_str(rop, sa.c_str(), 10, MPFR_RNDD);
 	T le = 0.0;
 	if (strcmp(typeid(T).name(), typeid(long double).name()) == 0) {
@@ -250,6 +315,7 @@ inline Interval<T> IntRead(const string &sa) {
 		le = mpfr_get_flt(rop, MPFR_RNDD);
 	}
 
+	// Parsowanie dla prawego krańca - celowo zawyżamy (RNDU - Round Up)
 	mpfr_set_str(rop, sa.c_str(), 10, MPFR_RNDU);
 	T re = 0.0;
 	if (strcmp(typeid(T).name(), typeid(long double).name()) == 0) {
@@ -262,13 +328,13 @@ inline Interval<T> IntRead(const string &sa) {
 		re = mpfr_get_flt(rop, MPFR_RNDU);
 	}
 
-	SetRounding<T>(FE_TONEAREST);
-
+	SetRounding<T>(FE_TONEAREST); // Powrót do domyślnego trybu procesora
 	r.a = le;
 	r.b = re;
 	return r;
 }
 
+// Specjalizacja IntRead dla typu wysokiej precyzji mpreal
 template<>
 inline Interval<mpreal> IntRead(const string &sa) {
 	Interval<mpreal> r;
@@ -285,6 +351,10 @@ inline Interval<mpreal> IntRead(const string &sa) {
 	return r;
 }
 
+/**
+ * @brief Zamienia krańce a i b na reprezentację znakową.
+ * Formatowanie w konwencji notacji naukowej.
+ */
 template<typename T>
 inline void Interval<T>::IEndsToStrings(string &left, string &right) {
 	mpfr_t rop;
@@ -292,8 +362,9 @@ inline void Interval<T>::IEndsToStrings(string &left, string &right) {
 	mpfr_init2(rop, precision);
 	char *str = NULL;
 	char *buffer = new char(precision + 3);
+	
+	// Formatowanie dolnego krańca z zaokrągleniem w dół
 	mpfr_set_ld(rop, this->a, MPFR_RNDD);
-
 	mpfr_get_str(buffer, &exponent, 10, outdigits, rop, MPFR_RNDD);
 	str = buffer;
 
@@ -307,8 +378,9 @@ inline void Interval<T>::IEndsToStrings(string &left, string &right) {
 	ss << std::setprecision(prec) << sign << str[splitpoint] << "."
 			<< &str[splitpoint + 1] << "E" << exponent - 1;
 	left = ss.str();
-	ss.str(std::string());
+	ss.str(std::string()); // Czyszczenie strumienia
 
+	// Formatowanie górnego krańca z zaokrągleniem w górę
 	mpfr_set_ld(rop, this->b, MPFR_RNDU);
 	mpfr_get_str(buffer, &exponent, 10, outdigits, rop, MPFR_RNDU);
 	str = buffer;
@@ -354,13 +426,18 @@ inline Interval<T> Interval<T>::Inverse() {
 	Interval<T> x(this->a, this->b);
 	Interval<T> z1, z2;
 
+	// Obliczanie odwrotności z rygorem zaokrągleń
 	SetRounding<T>(FE_DOWNWARD);
 	z1.a = 1 / x.a;
 	z2.b = 1 / x.b;
+	
 	SetRounding<T>(FE_UPWARD);
 	z1.b = 1 / x.b;
 	z2.a = 1 / x.a;
+	
 	SetRounding<T>(FE_TONEAREST);
+	
+	// W trybie skierowanym sprawdzamy, która wersja jest bezpieczniejsza (szersza)
 	if (DIntWidth(z1) >= DIntWidth(z2))
 		return z1;
 	else
@@ -389,9 +466,10 @@ inline T Interval<T>::GetWidth() {
 
 template<typename T>
 inline T Interval<T>::Mid() {
-	return (this->b + this->a) / 2.0;
+	return (this->b + this->a) / 2.0; // Nieuwzględnia rygorystycznych zaokrągleń dla średniej, gdyż zazwyczaj służy ona jedynie do punktów początkowych iteracji
 }
 
+// Generatory najczęstszych stałych matematycznych. Zwracają bezpieczny przedział pokrywający prawdziwą wartość stałej.
 template<typename T>
 inline Interval<T> Interval<T>::ISqr2() {
 	string i2;
@@ -456,6 +534,10 @@ inline T RightRead(const string &sa) {
 	return int_number.b;
 }
 
+/**
+ * @brief Zwraca szerokość w standardowej arytmetyce właściwej (PINT).
+ * Upewnia się, że obliczona szerokość nie jest zaniżona przez ucięcie FP.
+ */
 template<typename T>
 T IntWidth(const Interval<T> &x) {
 	SetRounding<T>(FE_UPWARD);
@@ -464,6 +546,11 @@ T IntWidth(const Interval<T> &x) {
 	return w;
 }
 
+/**
+ * @brief Zwraca szerokość przedziału dla arytmetyki Kauchera (DINT).
+ * Ponieważ może być 'a > b', bierze pod uwagę moduł szerokości w obu kierunkach
+ * zaokrąglenia i wybiera większą wartość dla zachowania bezpieczeństwa granic.
+ */
 template<typename T>
 T DIntWidth(const Interval<T> &x) {
 	long double w1, w2;
@@ -483,6 +570,13 @@ T DIntWidth(const Interval<T> &x) {
 		return w2;
 }
 
+// ====================================================================================
+// ========================== STANDARDOWA ARYTMETYKA PRZEDZIAŁOWA =====================
+// ====================================================================================
+
+/**
+ * @brief Implementacja przedziałowego Sinusa poprzez rozwinięcie w szereg Taylora (Maclaurina).
+ */
 template<typename T>
 Interval<T> ISin(const Interval<T> &x) {
 	bool is_even, finished;
@@ -491,10 +585,11 @@ Interval<T> ISin(const Interval<T> &x) {
 	Interval<T> d, s, w, w1, x2, tmp;
 	Interval<T> izero(0, 0);
 	string left, right;
-	T eps = 1E-18; //Interval<T>::GetEpsilon();
+	T eps = 1E-18; // Tolerancja dla testu zbieżności szeregu
 	T diff = std::numeric_limits<T>::max();
+	
 	if (x.a > x.b)
-		st = 1;
+		st = 1; // Błąd: przedział niewłaściwy nie jest tu obsługiwany
 	else {
 		s = x;
 		w = x;
@@ -504,25 +599,21 @@ Interval<T> ISin(const Interval<T> &x) {
 		finished = false;
 		st = 0;
 
+		// Pętla dodająca kolejne wyrazy szeregu naprzemiennego
 		do {
 			d.a = (k + 1) * (k + 2);
 			d.b = d.a;
-			s = IMul(s, IDiv(x2, d));
+			s = IMul(s, IDiv(x2, d)); // s = s * x^2 / ((k+1)(k+2))
 			if (is_even)
 				w1 = ISub(w, s);
 			else
 				w1 = IAdd(w, s);
 
-//			T oldMid = (w.a + w.b) / 2;
-//			T newMid = (w1.a + w1.b) / 2;
-//			T currDiff = abs(oldMid - newMid);
-//			finished = (currDiff > diff);
-//			diff = currDiff;
-
 			if ((w.a == 0) && (w.b == 0)) {
 				return izero;
 			}
 
+			// Sprawdzenie kryterium stopu (różnica względna / bezwzględna pomiędzy iteracjami < epsilon)
 			if ((w.a != 0) && (w.b != 0)) {
 				if ((abs(w.a - w1.a) / abs(w.a) < eps)
 						&& (abs(w.b - w1.b) / abs(w.b) < eps))
@@ -544,6 +635,7 @@ Interval<T> ISin(const Interval<T> &x) {
 			}
 
 			if (finished) {
+				// Korekta, aby sin(x) nigdy nie uciekł poza matematyczne ograniczenie obwiedni [-1, 1]
 				if (w1.b > 1) {
 					w1.b = 1;
 					if (w1.a > 1)
@@ -563,7 +655,7 @@ Interval<T> ISin(const Interval<T> &x) {
 		} while (!(finished || (k > INT_MAX / 2)));
 	}
 	if (!finished)
-		st = 2;
+		st = 2; // Osiągnięto limit iteracji bez zbieżności
 
 	Interval<T> r;
 	r.a = 0;
@@ -571,6 +663,10 @@ Interval<T> ISin(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Przedziałowy Cosinus z rozwinięcia szeregu Maclaurina.
+ * Analogicznie jak w ISin().
+ */
 template<typename T>
 Interval<T> ICos(const Interval<T> &x) {
 	Interval<T> c, d, w, w1, x2;
@@ -595,6 +691,8 @@ Interval<T> ICos(const Interval<T> &x) {
 		} else {
 			w1 = IAdd(w, c);
 		}
+		
+		// Kryterium zbieżności względnej
 		if ((w.a != 0) && (w.b != 0)) {
 			if (((abs(w.a - w1.a) / abs(w.a)) < 1e-18)
 					&& (abs(w.b - w1.b) / abs(w.b) < 1e-18))
@@ -613,7 +711,9 @@ Interval<T> ICos(const Interval<T> &x) {
 				finished = true;
 
 		}
+		
 		if (finished) {
+			// Twarde granice [-1, 1] dla cosinusa
 			if (w1.b > 1) {
 				w1.b = 1;
 				if (w1.a > 1)
@@ -642,6 +742,9 @@ Interval<T> ICos(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Przedziałowa funkcja wykładnicza e^x (szereg Maclaurina).
+ */
 template<typename T>
 Interval<T> IExp(const Interval<T> &x) {
 	bool finished;
@@ -650,10 +753,13 @@ Interval<T> IExp(const Interval<T> &x) {
 	Interval<T> d, e, w, w1;
 	string left, right;
 	Interval<T> tmp = x;
-	T eps = 1E-18; //2*Interval<T>::GetEpsilon();
+	T eps = 1E-18; 
 	T diff = std::numeric_limits<T>::max();
+	
+	// Przypadek specjalny: e^0 = 1
 	if ((x.a < 0) && (x.b > 0))
-		return {1,1};
+		return {1,1}; 
+		
 	if (x.a > x.b)
 		st = 1;
 	else {
@@ -668,12 +774,13 @@ Interval<T> IExp(const Interval<T> &x) {
 			d.b = k;
 			e = IMul(e, IDiv(x, d));
 			w1 = IAdd(w, e);
+			
 			T oldMid = (w.a + w.b) / 2;
 			T newMid = (w1.a + w1.b) / 2;
 			T currDiff = abs(oldMid - newMid);
-			//finished = (currDiff >= diff);
 			T tmpDiff = diff - currDiff;
 			diff = currDiff;
+			
 			if ((abs(w.a - w1.a) / abs(w.a) < eps)
 					&& (abs(w.b - w1.b) / abs(w.b) < eps)) {
 				finished = true;
@@ -682,6 +789,7 @@ Interval<T> IExp(const Interval<T> &x) {
 				w = w1;
 				k = k + 1;
 				if (k > 100000) {
+					// Wypisanie informacji pomocniczej w przypadku braku zbieżności
 					T wdth = w.GetWidth();
 
 					tmp.IEndsToStrings(left, right);
@@ -704,6 +812,12 @@ Interval<T> IExp(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Podnoszenie przedziału do kwadratu w bezpieczny sposób.
+ * Własność: Jeżeli zero należy do przedziału wejściowego, to po podniesieniu
+ * do kwadratu dolną granicą MUSI być 0. W przeciwnym razie jest to kwadrat
+ * mniejszego elementu.
+ */
 template<typename T>
 Interval<T> ISqr(const Interval<T> &x, int &st) {
 	long double minx, maxx;
@@ -715,15 +829,17 @@ Interval<T> ISqr(const Interval<T> &x, int &st) {
 	else {
 		st = 0;
 		if ((x.a <= 0) && (x.b >= 0))
-			minx = 0;
+			minx = 0; // Przedział zawiera 0. Minimalna wartość kwadratu to 0.
 		else if (x.a > 0)
 			minx = x.a;
 		else
 			minx = x.b;
+			
 		if (abs(x.a) > abs(x.b))
 			maxx = abs(x.a);
 		else
 			maxx = abs(x.b);
+			
 		SetRounding<T>(FE_DOWNWARD);
 		r.a = minx * minx;
 		SetRounding<T>(FE_UPWARD);
@@ -733,6 +849,10 @@ Interval<T> ISqr(const Interval<T> &x, int &st) {
 	return r;
 }
 
+/**
+ * @brief Pierwiastkowanie przedziału.
+ * Wymaga ostrożności: pierwiastek jest niezdefiniowany dla ujemnych przedziałów.
+ */
 template<typename T>
 Interval<T> ISqrt(const Interval<T> &x, int &st) {
 	Interval<T> r;
@@ -741,7 +861,7 @@ Interval<T> ISqrt(const Interval<T> &x, int &st) {
 	if (x.a > x.b) {
 		st = 1;
 	} else if (x.a < 0) {
-		st = 2;
+		st = 2; // Błąd matematyczny: pierwiastek z liczby ujemnej
 	} else {
 		st = 0;
 		SetRounding<T>(FE_DOWNWARD);
@@ -754,6 +874,10 @@ Interval<T> ISqrt(const Interval<T> &x, int &st) {
 	return r;
 }
 
+/**
+ * @brief Przedziałowe dodawanie właściwe: [a+c, b+d] 
+ * Oblicza lewą krawędź zaokrąglając w dół, prawą w górę.
+ */
 template<typename T>
 Interval<T> IAdd(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> r;
@@ -765,50 +889,61 @@ Interval<T> IAdd(const Interval<T> &x, const Interval<T> &y) {
 	return r;
 }
 
+/**
+ * @brief Przedziałowe odejmowanie właściwe: [a-d, b-c]
+ */
 template<typename T>
 Interval<T> ISub(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> r;
 	SetRounding<T>(FE_DOWNWARD);
-	r.a = x.a - y.b;
+	r.a = x.a - y.b; // Infimum to najmniejsza wartość: lewy - prawy
 	SetRounding<T>(FE_UPWARD);
-	r.b = x.b - y.a;
+	r.b = x.b - y.a; // Supremum to największa wartość: prawy - lewy
 	SetRounding<T>(FE_TONEAREST);
 	return r;
 }
 
+/**
+ * @brief Przedziałowe mnożenie właściwe.
+ * Ponieważ nie znamy a priori znaków wartości (mogą być dowolne z kombinacji ujemne/dodatnie),
+ * obliczamy wszystkie 4 iloczyny skrajne i wybieramy min() dla lewego i max() dla prawego,
+ * kontrolując rygorystycznie zaokrąglenia na poziomie FPU.
+ */
 template<typename T>
 Interval<T> IMul(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> r(0, 0);
 	T x1y1, x1y2, x2y1;
 
+	// OBLICZANIE DOLNEJ KRAWĘDZI (wyszukiwanie minimum)
 	SetRounding<T>(FE_DOWNWARD);
 	x1y1 = x.a * y.a;
 	x1y2 = x.a * y.b;
 	x2y1 = x.b * y.a;
 	r.a = x.b * y.b;
-	if (x2y1 < r.a)
-		r.a = x2y1;
-	if (x1y2 < r.a)
-		r.a = x1y2;
-	if (x1y1 < r.a)
-		r.a = x1y1;
+	if (x2y1 < r.a) r.a = x2y1;
+	if (x1y2 < r.a) r.a = x1y2;
+	if (x1y1 < r.a) r.a = x1y1;
 
+	// OBLICZANIE GÓRNEJ KRAWĘDZI (wyszukiwanie maksimum)
 	SetRounding<T>(FE_UPWARD);
 	x1y1 = x.a * y.a;
 	x1y2 = x.a * y.b;
 	x2y1 = x.b * y.a;
 
 	r.b = x.b * y.b;
-	if (x2y1 > r.b)
-		r.b = x2y1;
-	if (x1y2 > r.b)
-		r.b = x1y2;
-	if (x1y1 > r.b)
-		r.b = x1y1;
+	if (x2y1 > r.b) r.b = x2y1;
+	if (x1y2 > r.b) r.b = x1y2;
+	if (x1y1 > r.b) r.b = x1y1;
+	
 	SetRounding<T>(FE_TONEAREST);
 	return r;
 }
 
+/**
+ * @brief Przedziałowe dzielenie właściwe. 
+ * Chroni przed sytuacją dzielenia przez przedział obejmujący 0. 
+ * Podobnie jak w mnożeniu, oblicza 4 kombinacje z odpowiednim trybem zaokrągleń.
+ */
 template<typename T>
 Interval<T> IDiv(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> r;
@@ -817,19 +952,18 @@ Interval<T> IDiv(const Interval<T> &x, const Interval<T> &y) {
 	if ((y.a <= 0) && (y.b >= 0)) {
 		throw runtime_error("Division by an interval containing 0.");
 	} else {
+		// Minimum z 4 kombinacji
 		SetRounding<T>(FE_DOWNWARD);
 		x1y1 = x.a / y.a;
 		x1y2 = x.a / y.b;
 		x2y1 = x.b / y.a;
 		r.a = x.b / y.b;
 		t = r.a;
-		if (x2y1 < t)
-			r.a = x2y1;
-		if (x1y2 < t)
-			r.a = x1y2;
-		if (x1y1 < t)
-			r.a = x1y1;
+		if (x2y1 < t) r.a = x2y1;
+		if (x1y2 < t) r.a = x1y2;
+		if (x1y1 < t) r.a = x1y1;
 
+		// Maksimum z 4 kombinacji
 		SetRounding<T>(FE_UPWARD);
 		x1y1 = x.a / y.a;
 		x1y2 = x.a / y.b;
@@ -837,23 +971,29 @@ Interval<T> IDiv(const Interval<T> &x, const Interval<T> &y) {
 
 		r.b = x.b / y.b;
 		t = r.b;
-		if (x2y1 > t)
-			r.b = x2y1;
-		if (x1y2 > t)
-			r.b = x1y2;
-		if (x1y1 > t)
-			r.b = x1y1;
+		if (x2y1 > t) r.b = x2y1;
+		if (x1y2 > t) r.b = x1y2;
+		if (x1y1 > t) r.b = x1y1;
 
 	}
 	SetRounding<T>(FE_TONEAREST);
 	return r;
 }
 
+// ====================================================================================
+// ========================== SKIEROWANA ARYTMETYKA PRZEDZIAŁOWA ======================
+// ====================================================================================
+
+/**
+ * @brief Dodawanie Kauchera (skierowane).
+ * Zabezpiecza sytuację, w której któryś przedział może być niewłaściwy (a > b).
+ * Wylicza dwie możliwości i zwraca przedział najszerszy (zachowanie gwarancji zawierania wyniku).
+ */
 template<typename T>
 Interval<T> DIAdd(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> z1, z2;
 	if ((x.a <= x.b) && (y.a <= y.b)) {
-		return IAdd<T>(x, y);
+		return IAdd<T>(x, y); // Jeśli oba są właściwe, użyj zwykłego dodawania
 	} else {
 		SetRounding<T>(FE_DOWNWARD);
 		z1.a = x.a + y.a;
@@ -862,6 +1002,7 @@ Interval<T> DIAdd(const Interval<T> &x, const Interval<T> &y) {
 		z1.b = x.b + y.b;
 		z2.a = x.a + y.a;
 		SetRounding<T>(FE_TONEAREST);
+		
 		if (z1.GetWidth() >= z2.GetWidth())
 			return z1;
 		else
@@ -869,6 +1010,10 @@ Interval<T> DIAdd(const Interval<T> &x, const Interval<T> &y) {
 	}
 }
 
+/**
+ * @brief Odejmowanie Kauchera (skierowane). 
+ * Algorytm generuje obwiednię po uwzględnieniu potencjalnie niewłaściwych przedziałów wejściowych.
+ */
 template<typename T>
 Interval<T> DISub(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> z1, z2;
@@ -882,6 +1027,7 @@ Interval<T> DISub(const Interval<T> &x, const Interval<T> &y) {
 		z1.b = x.b - y.a;
 		z2.a = x.a - y.b;
 		SetRounding<T>(FE_TONEAREST);
+		
 		if (z1.GetWidth() >= z2.GetWidth())
 			return z1;
 		else
@@ -889,6 +1035,12 @@ Interval<T> DISub(const Interval<T> &x, const Interval<T> &y) {
 	}
 }
 
+/**
+ * @brief Mnożenie Kauchera (skierowane). 
+ * Ponieważ operuje na rozszerzonej strukturze algebraicznej, bada poszczególne
+ * podzbiory płaszczyzny dwuwymiarowej (np. całkowicie dodatnie, ujemne, przecinające oś zer).
+ * W implementacji jest to widoczne jako olbrzymia drabinka if-ów pokrywająca całą tabelę Kauchera.
+ */
 template<typename T>
 Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> z1, z2, r;
@@ -898,12 +1050,14 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 	if ((x.a <= x.b) && (y.a <= y.b))
 		r = IMul(x, y);
 	else {
+		// Logika identyfikacji stref przedziałów
 		xn = (x.a < 0) and (x.b < 0);
 		xp = (x.a > 0) and (x.b > 0);
 		yn = (y.a < 0) and (y.b < 0);
 		yp = (y.a > 0) and (y.b > 0);
 		zero = false;
-		// A, B in H-T
+		
+		// A, B w obszarach ściśle poza zerem
 		if ((xn || xp) && (yn || yp))
 			if (xp && yp) {
 				SetRounding<T>(FE_DOWNWARD);
@@ -934,7 +1088,7 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 				z1.b = x.a * y.a;
 				z2.a = x.b * y.b;
 			}
-		// A in H-T, B in T
+		// Złożone tabele przejść Kauchera uwzględniające przejście przez 0
 		else if ((xn || xp)
 				&& (((y.a <= 0) && (y.b >= 0)) || ((y.a >= 0) && (y.b <= 0))))
 			if (xp && (y.a <= y.b)) {
@@ -966,7 +1120,7 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 				z1.b = x.b * y.a;
 				z2.a = x.b * y.b;
 			}
-		// A in T, B in H-T
+		// Złożone tabele przejść c.d.
 		else if ((((x.a <= 0) && (x.b >= 0)) || ((x.a >= 0) && (x.b <= 0)))
 				&& (yn || yp))
 			if ((x.a <= x.b) && yp) {
@@ -998,7 +1152,7 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 				z1.b = x.a * y.b;
 				z2.a = x.b * y.b;
 			}
-		// A, B in Z-
+		// Operacje wokół stref zawierających samo zero
 		else if ((x.a >= 0) && (x.b <= 0) && (y.a >= 0) && (y.b <= 0)) {
 			SetRounding<T>(FE_DOWNWARD);
 			z1.a = x.a * y.a;
@@ -1022,6 +1176,8 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 		// A in Z and B in Z- or A in Z- and B in Z
 		else
 			zero = true;
+			
+		// Wybór bezpieczniejszego oszacowania z uwzględnieniem Zera 
 		if (zero) {
 			r.a = 0;
 			r.b = 0;
@@ -1035,20 +1191,24 @@ Interval<T> DIMul(const Interval<T> &x, const Interval<T> &y) {
 	return r;
 }
 
+/**
+ * @brief Dzielenie Kauchera (skierowane). Implementuje podobną wieloprzypadkową mechanikę 
+ * tabelaryczną co mnożenie skierowane. 
+ */
 template<typename T>
 Interval<T> DIDiv(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> z1, z2, r;
 	bool xn, xp, yn, yp, zero;
 
 	if ((x.a <= x.b) && (y.a <= y.b))
-		r = IDiv(x, y);
+		r = IDiv(x, y); // delegacja do zwykłego jeżeli przedziały są właściwe
 	else {
 		xn = (x.a < 0) && (x.b < 0);
 		xp = (x.a > 0) && (x.b > 0);
 		yn = (y.a < 0) && (y.b < 0);
 		yp = (y.a > 0) && (y.b > 0);
 		zero = false;
-		// A, B in H-T
+		// Drabinka reguł Kauchera dla dzielenia
 		if ((xn || xp) && (yn || yp))
 			if (xp && yp) {
 				SetRounding<T>(FE_DOWNWARD);
@@ -1113,6 +1273,8 @@ Interval<T> DIDiv(const Interval<T> &x, const Interval<T> &y) {
 			}
 		else
 			zero = true;
+			
+		// Wyjątek dzielenia w sytuacji kolizji z zerem dla trybu niewłaściwego
 		if (zero)
 			throw runtime_error("Division by an interval containing 0.");
 		else if (z1.GetWidth() >= z2.GetWidth())
@@ -1124,6 +1286,10 @@ Interval<T> DIDiv(const Interval<T> &x, const Interval<T> &y) {
 	return r;
 }
 
+/**
+ * @brief Skierowany trygonometryczny Sinus bazujący wewnętrznie na zespole
+ * operatorów skierowanych (DIMul, DIDiv, DIAdd, DISub).
+ */
 template<typename T>
 Interval<T> DISin(const Interval<T> &x) {
 	bool is_even, finished;
@@ -1149,6 +1315,7 @@ Interval<T> DISin(const Interval<T> &x) {
 				w1 = DISub(w, s);
 			else
 				w1 = DIAdd(w, s);
+				
 			if ((w.a != 0) && (w.b != 0)) {
 				if ((abs(w.a - w1.a) / abs(w.a) < 1e-18)
 						&& (abs(w.b - w1.b) / abs(w.b) < 1e-18))
@@ -1199,6 +1366,9 @@ Interval<T> DISin(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Skierowany trygonometryczny Cosinus bazujący na operatorach Kauchera.
+ */
 template<typename T>
 Interval<T> DICos(const Interval<T> &x) {
 	bool is_even, finished;
@@ -1275,6 +1445,9 @@ Interval<T> DICos(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Skierowana funkcja wykładnicza oparta o uogólnione operatory DIMul, DIAdd etc.
+ */
 template<typename T>
 Interval<T> DIExp(const Interval<T> &x) {
 	bool finished;
@@ -1313,6 +1486,9 @@ Interval<T> DIExp(const Interval<T> &x) {
 	return r;
 }
 
+/**
+ * @brief Skierowany kwadrat uogólniający standardowy proces.
+ */
 template<typename T>
 Interval<T> DISqr(const Interval<T> &x) {
 	long double minx, maxx;
@@ -1343,6 +1519,13 @@ Interval<T> DISqr(const Interval<T> &x) {
 	return r;
 }
 
+// ====================================================================================
+// ==================== PRZECIĄŻENIA OPERATORÓW DLA KLASY INTERVAL ====================
+// ====================================================================================
+
+/**
+ * @brief Operatory dodawania, w zależności od globalnego trybu wywołują IAdd (właściwe) lub DIAdd (Kauchera).
+ */
 template<typename T>
 inline Interval<T> Interval<T>::operator +(const Interval<T> &y) {
 	Interval<T> x(this->a, this->b);
@@ -1374,6 +1557,9 @@ inline Interval<T> operator +(Interval<T> x, const Interval<T> &y) {
 	}
 }
 
+/**
+ * @brief Operatory odejmowania, również zależne od globalnego trybu arytmetyki.
+ */
 template<typename T>
 inline Interval<T> Interval<T>::operator -(const Interval<T> &y) {
 	Interval<T> x(this->a, this->b);
@@ -1405,6 +1591,9 @@ inline Interval<T> operator -(Interval<T> x, const Interval<T> &y) {
 	}
 }
 
+/**
+ * @brief Operatory mnożenia przedziału przez przedział i przez skalary.
+ */
 template<typename T>
 inline Interval<T> Interval<T>::operator *(const Interval<T> &y) {
 	Interval<T> x(this->a, this->b);
@@ -1426,7 +1615,7 @@ inline Interval<T> Interval<T>::operator *(const Interval<T> &y) {
 
 template<typename T>
 inline Interval<T> operator *(int i, const Interval<T> &y) {
-	Interval<T> x = { i, i };
+	Interval<T> x = { i, i }; // Niejawna konwersja skalara (punktu) na przedział zdegradowany do punktu
 	switch (Interval<T>::mode) {
 	case PINT_MODE:
 		return IMul<T>(x, y);
@@ -1528,6 +1717,9 @@ inline Interval<T> Interval<T>::operator *(const int &i) {
 	return r;
 }
 
+/**
+ * @brief Operator dzielenia, analogicznie z uwzględnieniem trybu w całej klasie.
+ */
 template<typename T>
 inline Interval<T> Interval<T>::operator /(const Interval<T> &y) {
 	Interval<T> x(this->a, this->b);
@@ -1559,13 +1751,19 @@ inline Interval<T> operator /(Interval<T> x, const Interval<T> &y) {
 	}
 }
 
+/**
+ * @brief Otoczka wypukła dwóch przedziałów (Hull). 
+ * Zwraca najmniejszy pojedynczy przedział, który w całości pokrywa parametry x i y.
+ */
 template<typename T>
 Interval<T> Hull(const Interval<T> &x, const Interval<T> &y) {
 	Interval<T> r = { 0, 0 };
+	// Szukanie absolutnego minimum lewych krawędzi
 	r.a = min(x.a, x.b);
 	r.a = min(r.a, y.a);
 	r.a = min(r.a, y.b);
 
+	// Szukanie absolutnego maksimum prawych krawędzi
 	r.b = max(x.a, x.b);
 	r.b = max(r.b, y.a);
 	r.b = max(r.b, y.b);
@@ -1573,6 +1771,10 @@ Interval<T> Hull(const Interval<T> &x, const Interval<T> &y) {
 	return r;
 }
 
+/**
+ * @brief Specjalizacja funkcji formatującej końce przedziału dla wieloprecyzyjnego typu mpreal.
+ * Wewnętrznie bazuje bezpośrednio na wskaźnikach i buforach biblioteki MPFR C API.
+ */
 template<>
 inline void Interval<mpreal>::IEndsToStrings(string &left, string &right) {
 	mpfr_t rop;
@@ -1580,7 +1782,7 @@ inline void Interval<mpreal>::IEndsToStrings(string &left, string &right) {
 	mpfr_init2(rop, precision);
 	char *str = NULL;
 	char *buffer = new char(precision + 3);
-	mpfr_set(rop, this->a.mpfr_ptr(), MPFR_RNDD);
+	mpfr_set(rop, this->a.mpfr_ptr(), MPFR_RNDD); // Pobranie wewnętrznego wskaźnika i zaokrąglenie RNDD
 	mpfr_get_str(buffer, &exponent, 10, outdigits, rop, MPFR_RNDD);
 	str = buffer;
 
@@ -1596,7 +1798,7 @@ inline void Interval<mpreal>::IEndsToStrings(string &left, string &right) {
 	left = ss.str();
 	ss.str(std::string());
 
-	mpfr_set(rop, this->b.mpfr_ptr(), MPFR_RNDU);
+	mpfr_set(rop, this->b.mpfr_ptr(), MPFR_RNDU); // Pobranie wewnętrznego wskaźnika i zaokrąglenie RNDU
 	mpfr_get_str(buffer, &exponent, 10, outdigits, rop, MPFR_RNDU);
 	str = buffer;
 	splitpoint = (str[0] == '-') ? 1 : 0;
@@ -1606,6 +1808,10 @@ inline void Interval<mpreal>::IEndsToStrings(string &left, string &right) {
 	ss.clear();
 }
 
+/**
+ * @brief Szerokość DINT dedykowana dla mpreal, manipulująca kierunkiem 
+ * MPFR RNDU/RNDD wewnątrz własnych klas (mpreal API) zamiast bazowego FPU.
+ */
 template<>
 inline mpreal DIntWidth<mpreal>(const Interval<mpreal> &x) {
 	mpreal w1, w2;
@@ -1618,13 +1824,18 @@ inline mpreal DIntWidth<mpreal>(const Interval<mpreal> &x) {
 	w2 = x.b - x.a;
 	if (w2 < 0)
 		w2 = -w2;
-	mpreal::set_default_rnd(MPFR_RNDN);
+	mpreal::set_default_rnd(MPFR_RNDN); // Powrót do TONEAREST wg MPFR
 	if (w1 > w2)
 		return w1;
 	else
 		return w2;
 }
 
+/**
+ * @brief Wartość bezwzględna całego przedziału.
+ * Dokonuje translacji tak by zawsze |x| >= 0, zamieniając przy tym ewentualnie krawędzie
+ * przedziału jeśli byłyby nieustawione poprawnie pod względem nowej orientacji rosnącej.
+ */
 template<typename T>
 Interval<T> IAbs(const Interval<T> &x) {
 	T tmp = 0;
@@ -1640,40 +1851,24 @@ Interval<T> IAbs(const Interval<T> &x) {
 	return r;
 }
 
-//template<>
-//inline mpreal Interval<mpreal>::GetWidth() {
-//	Interval<mpreal> x(this->a, this->b);
-//	switch (mode) {
-//	case PINT_MODE:
-//		return IntWidth(x);
-//	case DINT_MODE:
-//		return DIntWidth(x);
-//	default:
-//		return IntWidth(x);
-//	}
-//}
+// ====================================================================================
+// ==================== JAWNE INSTANCJONOWANIE SZABLONÓW ==============================
+// ====================================================================================
+// Niezbędne, aby kompilator poprawnie rozwinął kod dla pożądanych typów liczbowych.
 
-//The explicit instantiation part
 template long double DIntWidth(const Interval<long double> &x);
-
-//template mpreal DIntWidth(const Interval<mpreal>& x);
-//template<>
 
 template class Interval<long double> ;
 template class Interval<double> ;
 template class Interval<float> ;
 template class Interval<mpreal> ;
 
+// Inicjalizacja stałych statycznych
 template<typename T> IAMode Interval<T>::mode = PINT_MODE;
 template<typename T> IAOutDigits Interval<T>::outdigits = LONGDOUBLE_DIGITS;
 
-//template<> IAPrecision Interval<long double>::precision = LONGDOUBLE_PREC;
-//template<> IAPrecision Interval<double>::precision = DOUBLE_PREC;
-//template<> IAPrecision Interval<float>::precision = FLOAT_PREC;
-
 template<> IAPrecision Interval<mpreal>::precision = MPREAL_PREC;
 template<typename T> IAPrecision Interval<T>::precision = LONGDOUBLE_PREC;
-//template IAOutDigits Interval<mpreal>::outdigits = LONGDOUBLE_DIGITS;
 
 //-------------------------------------------------------------------------------------
 

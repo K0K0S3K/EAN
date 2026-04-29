@@ -1,7 +1,19 @@
 import customtkinter
+import api
 
 small_font = ('Arial', 16)
 big_font = ('Arial', 22)
+
+class ResultWindow(customtkinter.CTkToplevel):
+    def __init__(self, results, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.title("Wyniki Obliczeń")
+        self.geometry("300x200")
+
+        # Wyświetlanie przekazanych danych
+        self.label = customtkinter.CTkLabel(self, text=f"Wynik operacji: {results}")
+        self.label.pack(padx=20, pady=20)
+
 
 class RadiobtnFrame(customtkinter.CTkFrame):
     def __init__(self, master, title, chechbox_data : list[str]):
@@ -25,10 +37,16 @@ class App(customtkinter.CTk):
     def __init__(self):
         super().__init__()
 
+        self.api = api.API()
+
+        self.toplevel_window = None
+
         self.title("my app")
         self.geometry("1050x600")
         self.grid_columnconfigure((0, 1, 2), weight=1)
         self.grid_rowconfigure((0, 1, 2), weight=1)
+
+        self.entry_text = "Wprowadź wielomian w formacie: a_n x^n + a_(n-1) x^(n-1) + ... + a_1 x + a_0"
 
         self.title_text = customtkinter.CTkLabel(self, 
                                                  text="Kalkulator pierwiastków zespolonych wielomianu (metoda Bairstowa)",
@@ -61,24 +79,31 @@ class App(customtkinter.CTk):
         self.run_button = customtkinter.CTkButton(self.input_frame, text="Uruchom", command=self.button_callback,font=big_font,height=80)
         self.run_button.grid(row=0, column=0, padx=40, pady=40, sticky="nwes")
 
-        self.input_type_frame = RadiobtnFrame(self.input_frame,
-            "Typ danych wejściowych", 
-            [
-                "tekst", 
-                "czytanie z pliku"
-            ])
-        
-        self.input_type_frame.grid(row=1, column=0, padx=20, pady=20, sticky="nw")
-
-
-        self.entry = customtkinter.CTkEntry(self, placeholder_text="Wprowadź wielomian",height=60,font=big_font)
+        self.entry = customtkinter.CTkEntry(self, placeholder_text=self.entry_text,height=60,font=big_font)
         self.entry.grid(row=2, column=0,columnspan=3 ,padx=20, pady=20, sticky="new")
 
     def button_callback(self):
         print("Arithmetic type:", self.arithemetic_frame.get_value())
         print("Counting type:", self.counting_frame.get_value())
-        print("Input type:", self.input_type_frame.get_value())
         print("Polynomial:", self.entry.get())
+
+        #self.api.send_command(self.arithemetic_frame.get_value())
+        #self.api.send_command(self.counting_frame.get_value())
+        #self.api.send_command(self.input_type_frame.get_value())
+        #self.api.send_command(self.entry.get())
+
+        #self.entry_text = self.api.get_data()
+        #print(self.entry_text)
+
+        self.entry_text = "HUJ"
+
+        if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
+            self.toplevel_window = ResultWindow(results=self.entry_text)
+        else:
+            self.toplevel_window.focus()
+
+        
+        
 
 
 def main():

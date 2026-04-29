@@ -57,7 +57,6 @@ mpreal A_(mpreal r, mpreal q, vector<mpreal> &b_values, vector<mpreal> &c_values
 {
     if(degree < 3)
         return 0;
-
     if (degree == 3)
         return b_values.at(0); 
     if (degree == 4)
@@ -70,7 +69,6 @@ mpreal B_(mpreal r, mpreal q, vector<mpreal> &b_values, vector<mpreal> &c_values
 {
     if(degree < 3)
         return 0;
-
     if (degree == 3)
         return b_values.at(1);
     return c_values.at(degree - 4) * q + b_values.at(degree - 2);
@@ -81,11 +79,6 @@ newton_output newton(vector<mpreal> coefficients, int max_iterations, mpreal tol
     newton_output output;
 
     int degree = (int)coefficients.size() - 1;
-
-    /*
-    cout << "degree: " << degree << endl;
-    cout << "coefficients.size(): " << coefficients.size() << endl;
-    */
 
     mpreal r = 0.5;
     mpreal q = 0.5;
@@ -98,12 +91,6 @@ newton_output newton(vector<mpreal> coefficients, int max_iterations, mpreal tol
         b(r, q, b_values, coefficients);
         c(r, q, c_values, b_values);
 
-        /*
-        cout << "iter: " << iter << endl;
-        cout << "degree-3: " << degree-3 << ", degree-2: " << degree-2 << endl;
-        cout << "degree-5: " << degree-5 << ", degree-4: " << degree-4 << endl;
-        */
-
         mpreal A_val = A(r, q, b_values, coefficients, degree);
         mpreal B_val = B(r, q, b_values, coefficients, degree);
         mpreal A_prime = A_(r, q, b_values, c_values, degree);
@@ -114,20 +101,6 @@ newton_output newton(vector<mpreal> coefficients, int max_iterations, mpreal tol
         mpreal Br = q*A_prime;
         mpreal Bq = B_prime;
 
-        /*
-        cout << "b: ";
-        for(auto& v : b_values) cout << v << " ";
-        cout << endl;
-
-        cout << "c: ";
-        for(auto& v : c_values) cout << v << " ";
-        cout << endl;
-
-        cout << "A_val=" << A_val << " B_val=" << B_val << endl;
-        cout << "A_prime=" << A_prime << " B_prime=" << B_prime << endl;
-        cout << "det=" << (Ar*Bq - Aq*Br) << endl;
-        */
-
         mpreal denominator = 1/(Ar * Bq - Aq * Br);
 
         mpreal dr = (A_val * Bq - Aq * B_val) * denominator;
@@ -137,16 +110,68 @@ newton_output newton(vector<mpreal> coefficients, int max_iterations, mpreal tol
         q = q - dq;
 
         if (abs(dr) < tolerance && abs(dq) < tolerance) {
-            break;
-}
+            break;  
+        }
     }
 
     output.r = r;
     output.q = q;
     output.coefficients = vector<mpreal>(b_values.begin(),b_values.end() - 2);
+
     reverse(output.coefficients.begin(), output.coefficients.end());
+
     return output;
 
+}
+
+vector<complex_interval> first_degree_roots(vector<mpreal> coefficients, mpreal zerodet)
+{
+    vector<complex_interval> output;
+
+    complex_interval root;
+    root.real = -coefficients.at(0) / coefficients.at(1);
+    root.imag = 0;
+    output.push_back(root);
+
+    for (auto& root : output)
+    {
+        if (abs(root.real) < zerodet) root.real = 0;
+        if (abs(root.imag) < zerodet) root.imag = 0;
+    }
+
+    return output;
+}
+
+vector<complex_interval> second_degree_roots(vector<mpreal> coefficients, mpreal zerodet)
+{
+    vector<complex_interval> output;
+
+    mpreal delta = coefficients.at(1) * coefficients.at(1) - 4 * coefficients.at(2) * coefficients.at(0);
+    complex_interval r1, r2;
+    if (delta >= 0)
+    {
+        r1.real = (-coefficients.at(1) + sqrt(delta)) / (2 * coefficients.at(2));
+        r1.imag = 0;
+        r2.real = (-coefficients.at(1) - sqrt(delta)) / (2 * coefficients.at(2));
+        r2.imag = 0;
+    }
+    else
+    {
+        r1.real = -coefficients.at(1) / (2 * coefficients.at(2));
+        r1.imag =  sqrt(-delta)       / (2 * coefficients.at(2));
+        r2.real = r1.real;
+        r2.imag = -r1.imag;
+    }
+    output.push_back(r1);
+    output.push_back(r2);
+
+    for (auto& root : output)
+    {
+        if (abs(root.real) < zerodet) root.real = 0;
+        if (abs(root.imag) < zerodet) root.imag = 0;
+    }
+
+    return output;
 }
 
 
@@ -161,67 +186,22 @@ vector<complex_interval> bairstow_method(int degree, vector<mpreal> coefficients
 
     if (degree == 1)
     {
-        complex_interval root;
-        root.real = -coefficients.at(0) / coefficients.at(1);
-        root.imag = 0;
-        output.push_back(root);
-        return output;
+        return first_degree_roots(coefficients, zerodet);
     }
 
     if (degree == 2)
     {
-        mpreal delta = coefficients.at(1) * coefficients.at(1)
-                     - 4 * coefficients.at(2) * coefficients.at(0);
-        complex_interval r1, r2;
-        if (delta >= 0)
-        {
-            r1.real = (-coefficients.at(1) + sqrt(delta)) / (2 * coefficients.at(2));
-            r1.imag = 0;
-            r2.real = (-coefficients.at(1) - sqrt(delta)) / (2 * coefficients.at(2));
-            r2.imag = 0;
-        }
-        else
-        {
-            r1.real = -coefficients.at(1) / (2 * coefficients.at(2));
-            r1.imag =  sqrt(-delta)       / (2 * coefficients.at(2));
-            r2.real = r1.real;
-            r2.imag = -r1.imag;
-        }
-        output.push_back(r1);
-        output.push_back(r2);
-        return output;
+        return second_degree_roots(coefficients, zerodet);
     }
 
     newton_output result = newton(coefficients, max_iterations, tolerance);
 
-    mpreal delta = result.r * result.r + 4 * result.q;
-    complex_interval r1, r2;
-    if (delta >= 0)
-    {
-        r1.real = (result.r + sqrt(delta)) / 2;
-        r1.imag = 0;
-        r2.real = (result.r - sqrt(delta)) / 2;
-        r2.imag = 0;
-    }
-    else
-    {
-        r1.real =  result.r / 2;
-        r1.imag =  sqrt(-delta) / 2;
-        r2.real =  result.r / 2;
-        r2.imag = -sqrt(-delta) / 2;
-    }
-    output.push_back(r1);
-    output.push_back(r2);
+    vector<complex_interval> temp = second_degree_roots({result.coefficients.at(0), result.r, result.q}, zerodet);
+    
+    output.insert(output.end(), temp.begin(), temp.end());
 
-    int new_degree = (int)result.coefficients.size() - 1;
-    vector<complex_interval> rest = bairstow_method(new_degree, result.coefficients, max_iterations, tolerance, zerodet);
+    vector<complex_interval> rest = bairstow_method(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, tolerance, zerodet);
     output.insert(output.end(), rest.begin(), rest.end());
-
-    for (auto& root : output)
-    {
-        if (abs(root.real) < zerodet) root.real = 0;
-        if (abs(root.imag) < zerodet) root.imag = 0;
-    }
 
     return output;
 }
@@ -230,14 +210,14 @@ vector<complex_interval> bairstow_method(int degree, vector<mpreal> coefficients
 int main()
 {
 
-    vector<vector<mpreal>> tests = {{-6,11,-6,1},{24,-50,35,-10,1},{4,0,5,0,1},{8,-12,14,15,7,-3,1},{-8, 12, -6, 1},{2},{4, 10, 10, 5, 1}};
+    vector<vector<mpreal>> tests = {{1,0,1}};
 
     int i = 1;
 
     for(const auto& coefficients : tests)
     {
         cout << "Test " << i++ << " :" << endl;
-        vector<complex_interval> roots = bairstow_method(coefficients.size() - 1, coefficients, 500, 1e-20, 1e-20);
+        vector<complex_interval> roots = bairstow_method(coefficients.size() - 1, coefficients, 500, 1e-20, 1e-10);
         for (const auto& root : roots)
         {
             cout << "Root: " << root.real << " + " << root.imag << "i" << endl;
