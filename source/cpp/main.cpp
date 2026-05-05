@@ -20,11 +20,9 @@ int main()
     while (true)
     {
         getline(cin, arithmetic);
-        getline(cin, counting);
-        getline(cin, input_type);
         getline(cin, polynomial);
 
-        cout << "DZIAŁA" << endl;
+        cout << polynomial << endl;
     }
 
 

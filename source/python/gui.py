@@ -46,7 +46,7 @@ class App(customtkinter.CTk):
         self.grid_columnconfigure((0, 1, 2), weight=1)
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
-        self.entry_text = "Wprowadź wielomian w formacie: a_n x^n + a_(n-1) x^(n-1) + ... + a_1 x + a_0"
+        self.entry_text = "Wielomian w formacie: a_n,n a_(n-1),n-1 ... a_0,0 lub [a_n,b_n],n [a_(n-1),b_(n-1)],n-1 ... [a_0,b_0],0"
 
         self.title_text = customtkinter.CTkLabel(self, 
                                                  text="Kalkulator pierwiastków zespolonych wielomianu (metoda Bairstowa)",
@@ -54,24 +54,15 @@ class App(customtkinter.CTk):
                                                  font=big_font,height=40)
         self.title_text.grid(row=0, column=0, columnspan=3, padx=20, pady=20, sticky="nwes")
 
-        self.arithemetic_frame = RadiobtnFrame(self,
-            "Typ arytmetyki", 
-            [
-                "zwykła zmiennopozycyjna", 
-                "przedziałowa zmiennopozycyjna"
-            ])
-        
-        self.arithemetic_frame.grid(row=1, column=1, padx=20, pady=20, sticky="nw")
-
         self.counting_frame = RadiobtnFrame(self,
             "Typ zliczania", 
             [
-                "zwykłe", 
-                "przedziałowe dla danych rzeczywistych",
-                "przedziałowe dla danych przedziałowych"
+                "zwykłe (arytmetyka zmiennoprzecinkowa)", 
+                "przedziałowe dla danych rzeczywistych (arytmetyka przedziałowa)",
+                "przedziałowe dla danych przedziałowych (arytmetyka przedziałowa)"
             ])
         
-        self.counting_frame.grid(row=1, column=2, padx=20, pady=20, sticky="nw")
+        self.counting_frame.grid(row=1, column=1, columnspan=2, padx=20, pady=20, sticky="nw")
 
         self.input_frame = customtkinter.CTkFrame(self)
         self.input_frame.grid(row=1, column=0, padx=20, pady=20, sticky="nw")
@@ -83,19 +74,15 @@ class App(customtkinter.CTk):
         self.entry.grid(row=2, column=0,columnspan=3 ,padx=20, pady=20, sticky="new")
 
     def button_callback(self):
-        print("Arithmetic type:", self.arithemetic_frame.get_value())
         print("Counting type:", self.counting_frame.get_value())
         print("Polynomial:", self.entry.get())
 
-        #self.api.send_command(self.arithemetic_frame.get_value())
-        #self.api.send_command(self.counting_frame.get_value())
+        self.api.send_command(self.counting_frame.get_value())
         #self.api.send_command(self.input_type_frame.get_value())
-        #self.api.send_command(self.entry.get())
+        self.api.send_command(self.entry.get())
 
-        #self.entry_text = self.api.get_data()
-        #print(self.entry_text)
-
-        self.entry_text = "HUJ"
+        self.entry_text = self.api.get_data()
+        print(self.entry_text)
 
         if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
             self.toplevel_window = ResultWindow(results=self.entry_text)
