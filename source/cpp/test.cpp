@@ -69,20 +69,13 @@ T A_(T r, T q, vector<T> &b_values, vector<T> &c_values, int degree)
 {
     if(degree < 3)
     {
-        if constexpr(is_same_v<T, mpreal> || is_same_v<T, long double>)
+        if constexpr(is_same_v<T, long double>)
         {
             return 0;
         }
-        else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+        else if constexpr(is_same_v<T, Interval<long double>>)
         {
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                return IntRead<mpreal>("0");
-            }
-            else if constexpr(is_same_v<T, Interval<long double>>)
-            {
-                return IntRead<long double>("0");
-            }
+            return IntRead<long double>("0");
         }
     }
     if (degree == 3)
@@ -100,20 +93,13 @@ T B_(T r, T q, vector<T> &b_values, vector<T> &c_values, int degree)
 {
     if(degree < 3)
     {
-        if constexpr(is_same_v<T, mpreal> || is_same_v<T, long double>)
+        if constexpr(is_same_v<T, long double>)
         {
             return 0;
         }
-        else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+        else if constexpr(is_same_v<T, Interval<long double>>)
         {
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                return IntRead<mpreal>("0");
-            }
-            else if constexpr(is_same_v<T, Interval<long double>>)
-            {
-                return IntRead<long double>("0");
-            }
+           return IntRead<long double>("0");
         }
     }
     if (degree == 3)
@@ -131,26 +117,26 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
     int degree = (int)coefficients.size() - 1;
 
-    T r, q;
+    T q, r;
 
-    if constexpr (is_same_v<T, mpreal> || is_same_v<T, long double>)
+    if constexpr (is_same_v<T, long double>)
     {
-        r = 0.5;
-        q = 0.5;
+        T r = coefficients.at(coefficients.size() - 2) / coefficients.at(coefficients.size() - 1);
+        T q = coefficients.at(coefficients.size() - 3) / coefficients.at(coefficients.size() - 1);
     }
-    else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+    else if constexpr (is_same_v<T, Interval<long double>>)
     {
-        if constexpr(is_same_v<T, Interval<mpreal>>)
-        {
-            r = IntRead<mpreal>("0.5");
-            q = IntRead<mpreal>("0.5");
-        }
-        else
-        {
-            r = IntRead<long double>("0.5");
-            q = IntRead<long double>("0.5");
-        }
+        long double r_mid = coefficients.at(coefficients.size() - 2).Mid() / coefficients.at(coefficients.size() - 1).Mid();
+        long double q_mid = coefficients.at(coefficients.size() - 3).Mid() / coefficients.at(coefficients.size() - 1).Mid();
+
+        r.a = r_mid;
+        r.b = r_mid;
+
+        q.a = q_mid;
+        q.b = q_mid;
     }
+
+   
 
     vector<T> b_values(coefficients.size());
     vector<T> c_values(coefficients.size());
@@ -172,49 +158,40 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
         T denominator = Ar * Bq - Aq * Br;
 
-        bool contains_zero;
+        
+        // Sprawdzenie, czy wyznacznik zawiera zero
+        bool contains_zero = false;
         if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
             contains_zero = (denominator.a <= 0 && denominator.b >= 0);
         } else {
-            contains_zero = (denominator == 0);
+            // Zabezpieczenie przed epsilonem maszynowym dla zwykłych typów
+            contains_zero = (abs(denominator) < 1e-14); 
         }
 
-        if(contains_zero)
-        {
-            if constexpr(is_same_v<T, mpreal> || is_same_v<T, long double>)
-            {
-                r += 0.000000001;
-                q -= 0.000000001;
+        // Logika ratunkowa
+        if (contains_zero) {
+            // Jakobian jest osobliwy. Silnie i asymetrycznie zaburzamy punkt startowy,
+            // aby wyrzucić Newtona z martwej strefy.
+            if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
+                auto new_r = r.Mid() * 1.5 + 0.1234;
+                auto new_q = q.Mid() * 0.5 - 0.4321;
+                
+                r.a = new_r; 
+                r.b = new_r;
+                q.a = new_q; 
+                q.b = new_q;
+            } else {
+                r = r * 1.5 + 0.1234;
+                q = q * 0.5 - 0.4321;
             }
-            else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
-            {
-                if constexpr(is_same_v<T, Interval<mpreal>>)
-                {
-                    r = r + IntRead<mpreal>("0.000000001");
-                    q = q - IntRead<mpreal>("0.000000001");
-                }
-                else
-                {
-                    r = r + IntRead<long double>("0.000000001");
-                    q = q - IntRead<long double>("0.000000001");
-                }
-            }
-            continue;
+            // Przerywamy obecne obliczenia dr i dq, wracamy na początek pętli
+            continue; 
         }
 
-        if constexpr (is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
-        {
-            if constexpr (is_same_v<T, Interval<mpreal>>)
-            {
-                denominator = IntRead<mpreal>("1") / denominator;
-            }
-            else
-            {
-                denominator = IntRead<long double>("1") / denominator;
-            }
-        }
-        else
-        {
+        // Dopiero gdy jesteśmy bezpieczni, wykonujemy dzielenie
+        if constexpr (is_same_v<T, Interval<long double>>) {
+            denominator = IntRead<long double>("1") / denominator;    
+        } else {
             denominator = 1 / denominator;
         }
 
@@ -224,25 +201,24 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
         r = r - dr;
         q = q - dq;
 
-        if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+        if constexpr (is_same_v<T, Interval<long double>>)
         {
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                if (abs(dr.a) < tolerance && abs(dr.b) < tolerance && abs(dq.a) < tolerance && abs(dq.b) < tolerance) 
-                    break;
-            }
-            else if constexpr(is_same_v<T, Interval<long double>>)
-            {
-                if (abs(dr.a) < tolerance && abs(dr.b) < tolerance && abs(dq.a) < tolerance && abs(dq.b) < tolerance) 
-                    break;
-                
-            }
+            long double mid_r = r.Mid();
+            long double mid_q = q.Mid();
+            
+            r.a = mid_r;
+            r.b = mid_r;
+            q.a = mid_q;
+            q.b = mid_q;
         }
-        else
-        {
+
+
+        if constexpr(is_same_v<T, Interval<long double>>) {
+            if (abs(dr.Mid()) < tolerance && abs(dq.Mid()) < tolerance) 
+                break;
+        } else {
             if (abs(dr) < tolerance && abs(dq) < tolerance) 
                 break;
-           
         }
     }
 
@@ -263,49 +239,17 @@ vector<complex_interval<T>> first_degree_roots(vector<T> coefficients, long doub
 
     complex_interval<T> root;
 
-    if constexpr (is_same_v<T, mpreal> || is_same_v<T, long double>)
+    if constexpr (is_same_v<T, long double>)
     {
         root.real = -1 * coefficients.at(0) / coefficients.at(1);
         root.imag = 0;
         output.push_back(root);
-
-        for (auto& root : output)
-        {
-            if (abs(root.real) < zero) root.real = 0;
-            if (abs(root.imag) < zero) root.imag = 0;
-        }
     } 
-    else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+    else if constexpr(is_same_v<T, Interval<long double>>)
     {
-        
-        root.real = -1 * coefficients.at(0) / coefficients.at(1);
-
-        if constexpr(is_same_v<T, Interval<mpreal>>)
-        {
-            root.imag = IntRead<mpreal>("0");
-            root.real = IntRead<mpreal>("0") - (coefficients.at(0) / coefficients.at(1));
-        }
-        else
-        {
-            root.imag = IntRead<long double>("0");
-            root.real = IntRead<long double>("0") - (coefficients.at(0) / coefficients.at(1));
-        }
-            
+        root.imag = IntRead<long double>("0");
+        root.real = IntRead<long double>("0") - (coefficients.at(0) / coefficients.at(1));               
         output.push_back(root);
-
-        for (auto& root : output)
-        {
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                if (abs(root.real.a) < zero && abs(root.real.b) < zero) root.real = IntRead<mpreal>("0");
-                if (abs(root.imag.a) < zero && abs(root.imag.b) < zero) root.imag = IntRead<mpreal>("0");
-            }
-            else
-            {
-                if (abs(root.real.a) < zero && abs(root.real.b) < zero) root.real = IntRead<long double>("0");
-                if (abs(root.imag.a) < zero && abs(root.imag.b) < zero) root.imag = IntRead<long double>("0");
-            }
-        }
     }
 
     return output;
@@ -316,7 +260,7 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
 {
     vector<complex_interval<T>> output;
 
-    if constexpr (is_same_v<T, mpreal> || is_same_v<T, long double>)
+    if constexpr (is_same_v<T, long double>)
     {
         T delta = coefficients.at(1) * coefficients.at(1) - 4 * coefficients.at(2) * coefficients.at(0);
         complex_interval<T> r1, r2;
@@ -336,14 +280,8 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
         }
         output.push_back(r1);
         output.push_back(r2);
-
-        for (auto& root : output)
-        {
-            if (abs(root.real) < zero) root.real = 0;
-            if (abs(root.imag) < zero) root.imag = 0;
-        }
     } 
-    else if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>)
+    else if constexpr(is_same_v<T, Interval<long double>>)
     {
         T a = coefficients.at(2);
         T b = coefficients.at(1);
@@ -358,45 +296,35 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
         if (delta.a >= 0 && delta.b >= 0)
         {
             r1.real = (-1 * b + ISqrt(delta,x)) / (2 * a);
-
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                r1.imag = IntRead<mpreal>("0");
-                r2.imag = IntRead<mpreal>("0");
-            }
-            else if constexpr(is_same_v<T, Interval<long double>>)
-            {
-                r1.imag = IntRead<long double>("0");
-                r2.imag = IntRead<long double>("0");
-            }
-            
+            r1.imag = IntRead<long double>("0");
             r2.real = (-1 * b - ISqrt(delta,x)) / (2 * a);
-            
+            r2.imag = IntRead<long double>("0");
         }
-        else
-        {
+        else if (delta.b < 0) {
+            // Czysto ujemna delta (pełne zespolone)
             r1.real = -1 * b / (2 * a);
-            r1.imag = ISqrt((-1 * delta),x) / (2 * a);
+            r1.imag = ISqrt((-1 * delta), x) / (2 * a);
             r2.real = r1.real;
+            r2.imag = -1 * r1.imag;
+        }
+        else {
+            // delta przecina zero (np. a < 0, b >= 0). Tniemy ją na dwie osobne obwiednie.
+            T delta_pos = delta; 
+            delta_pos.a = 0; // Ucinamy część ujemną dla dziedziny rzeczywistej
+            
+            T delta_neg = delta; 
+            delta_neg.b = 0; // Ucinamy część dodatnią
+            delta_neg = -1 * delta_neg; // Robimy z niej dodatnią pod pierwiastek zespolony
+
+            r1.real = (-1 * b + ISqrt(delta_pos, x)) / (2 * a);
+            r2.real = (-1 * b - ISqrt(delta_pos, x)) / (2 * a);
+
+            r1.imag = ISqrt(delta_neg, x) / (2 * a);
             r2.imag = -1 * r1.imag;
         }
 
         output.push_back(r1);
-        output.push_back(r2);
-
-        for (auto& root : output)
-        {
-            if constexpr(is_same_v<T, Interval<mpreal>>)
-            {
-                if (abs(root.real.a) < zero && abs(root.real.b) < zero) root.real = IntRead<mpreal>("0");
-                if (abs(root.imag.a) < zero && abs(root.imag.b) < zero) root.imag = IntRead<mpreal>("0");
-            }
-            else if constexpr(is_same_v<T, Interval<long double>>)
-            {
-                if (abs(root.real.a) < zero && abs(root.real.b) < zero) root.real = IntRead<long double>("0");
-                if (abs(root.imag.a) < zero && abs(root.imag.b) < zero) root.imag = IntRead<long double>("0");
-            }
-        }   
+        output.push_back(r2); 
     }
     
 
@@ -428,13 +356,9 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
 
     T a_coef;
 
-    if constexpr (is_same_v<T, mpreal> || is_same_v<T, long double>)
+    if constexpr (is_same_v<T, long double>)
     {
         a_coef = 1.0;
-    }
-    else if constexpr (is_same_v<T, Interval<mpreal>>)
-    {
-        a_coef = IntRead<mpreal>("1.0");
     }
     else if constexpr (is_same_v<T, Interval<long double>>)
     {
@@ -454,59 +378,60 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
 int main()
 {
 
-    Interval<mpreal>::Initialize();
-    Interval<mpreal>::SetMode(PINT_MODE);
+    Interval<long double>::Initialize();
+    Interval<long double>::SetMode(PINT_MODE);
 
-    /*
-    vector<vector<long double>> tests = {{1,0,1}};
-
-    int i = 1;
-
-    for(const auto& coefficients : tests)
-    {
-        cout << "Test " << i++ << " :" << endl;
-
-        vector<complex_interval<long double>> roots = bairstow_method<long double>(coefficients.size() - 1, coefficients, 500, 1e-20, 1e-10);
-
-        for (const auto& root : roots)
-        {
-            //cout << "Root: [" << root.real.a << "," << root.real.b << "] + [" << root.imag.a << "," << root.imag.b << "]i" << endl;
-            cout << "Root: " << root.real << " + " << root.imag << "i" << endl;
-        }
-        cout << endl;
-    }*/
-    
-
-    
     vector<vector<Interval<long double>>> tests = {
-    // 1. x^2 + 1 = 0 (Pierwiastki: 0 +/- 1i)
-    {IntRead<long double>("1.0"), IntRead<long double>("0.0"), IntRead<long double>("1.0")},
+    // 1. x^3 - 3x^2 + 4x - 2 = 0 
+    // Pierwiastki: 1.0, 1.0 +/- i
+    // Klasyczny test stopnia 3 z jednym pierwiastkiem rzeczywistym i parą zespoloną.
+    // --- STOPIEŃ 3 ---
 
-    // 2. x^2 - 5x + 6 = 0 (Pierwiastki rzeczywiste: 2.0 i 3.0)
-    {IntRead<long double>("6.0"), IntRead<long double>("-5.0"), IntRead<long double>("1.0")},
+    // 1. x^3 - 2x^2 - x + 2 = 0
+{IntRead<long double>("5.0"), IntRead<long double>("6.0"), IntRead<long double>("2.0")},
 
-    // 3. x^4 - 1 = 0 (Pierwiastki: 1, -1, i, -i)
-    {IntRead<long double>("-1.0"), IntRead<long double>("0.0"), IntRead<long double>("0.0"), IntRead<long double>("0.0"), IntRead<long double>("1.0")},
+    // --- STOPIEŃ 3 ---
 
-    // 4. x^3 - 2x^2 + x - 2 = 0 (Pierwiastki: 2.0, i, -i)
-    {IntRead<long double>("-2.0"), IntRead<long double>("1.0"), IntRead<long double>("-2.0"), IntRead<long double>("1.0")},
+    // 2. x^3 - 4x^2 + 9x - 10 = 0
+    // Pierwiastki: 2.0, 1.0 +/- 2i
+    // Asymetryczny układ: jeden pierwiastek rzeczywisty i "szeroka" para zespolona. 
+    // Sprawdza, czy Bairstow dobrze odseparuje czynnik liniowy na samym końcu po wycięciu czynnika kwadratowego.
+    {IntRead<long double>("-10.0"), IntRead<long double>("9.0"), IntRead<long double>("-4.0"), IntRead<long double>("1.0")},
 
-    // 5. Wielomian z pierwiastkami wielokrotnymi: (x-1)^2 = x^2 - 2x + 1
-    {IntRead<long double>("1.0"), IntRead<long double>("-2.0"), IntRead<long double>("1.0")},
+    // 3. x^3 + 0.7x^2 - 5.58x + 3.96 = 0
+    // Pierwiastki: 1.1, 1.2, -3.0
+    // Bardzo dobry test na stabilność. Dwa pierwiastki rzeczywiste są blisko siebie (1.1 i 1.2). 
+    // Standardowa metoda Newtona często w takich miejscach oscyluje i ma problem z domknięciem przedziału błędu.
+    {IntRead<long double>("3.96"), IntRead<long double>("-5.58"), IntRead<long double>("0.7"), IntRead<long double>("1.0")},
 
-    // 6. x^2 + 2x + 5 = 0 (Pierwiastki: -1 +/- 2i)
-    {IntRead<long double>("5.0"), IntRead<long double>("2.0"), IntRead<long double>("1.0")},
+    // --- STOPIEŃ 4 ---
 
-    // x^4 + 5x^3 + 10x^2 + 10x + 4 = 0 (Pierwiastki: -1 +/- i, -2 +/- i)
-    {IntRead<long double>("4.0"), IntRead<long double>("10.0"), IntRead<long double>("10.0"), IntRead<long double>("5.0"), IntRead<long double>("1.0")}
-};
+    // 4. x^4 + 2x^3 + 3x^2 + 2x + 2 = 0
+    // Pierwiastki: +/- i, -1.0 +/- i
+    // Mieszanka czysto urojonej pary (+/- i) z parą mającą przesunięcie rzeczywiste. 
+    // Algorytm musi poprawnie namierzyć dwa różne czynniki kwadratowe bez potknięcia się na zerowej części rzeczywistej pierwszej pary.
+    {IntRead<long double>("2.0"), IntRead<long double>("2.0"), IntRead<long double>("3.0"), IntRead<long double>("2.0"), IntRead<long double>("1.0")},
+
+    // 5. x^4 + 3x^3 + 3x^2 - 37x - 78 = 0
+    // Pierwiastki: 3.0, -2.0, -2.0 +/- 3i
+    // Solidny test deflacji. Duże współczynniki na końcu (-78, -37). Startowa heurystyka dla r i q (wyciąganie Mid() 
+    // z najwyższych współczynników) musi tutaj dobrze zadziałać, żeby nie wpaść w zbyt długą pętlę Newtona.
+    {IntRead<long double>("-78.0"), IntRead<long double>("-37.0"), IntRead<long double>("3.0"), IntRead<long double>("3.0"), IntRead<long double>("1.0")},
+
+    // --- STOPIEŃ 5 ---
+
+    // 6. 2x^5 - 21x^4 + 64x^3 - 31x^2 - 78x + 40 = 0
+    // Pierwiastki: -1.0, 0.5, 2.0, 4.0, 5.0
+    // 5 odrębnych pierwiastków rzeczywistych o różnym "rozstrzale" (od -1 do 5, w tym ułamek 0.5). 
+    // Zmusza to metodę Bairstowa do sfabrykowania dwóch czynników kwadratowych ze zlepku tych pierwiastków, 
+    // co przy stopniu nieparzystym i współczynniku kierunkowym równym 2 jest doskonałym sprawdzianem dla całkowitej dokładności programu.
+    {IntRead<long double>("40.0"), IntRead<long double>("-78.0"), IntRead<long double>("-31.0"), IntRead<long double>("64.0"), IntRead<long double>("-21.0"), IntRead<long double>("2.0")}
+    };
     int i = 1;
 
     for(const auto& coefficients : tests)
     {
-        cout << "Test " << i++ << " :" << endl;
-
-        vector<complex_interval<Interval<long double>>> roots = bairstow_method<Interval<long double>>(coefficients.size() - 1, coefficients, 16, 1e-16,1e-16);
+        vector<complex_interval<Interval<long double>>> roots = bairstow_method<Interval<long double>>(coefficients.size() - 1, coefficients,150, 1e-11,1e-11);
 
         string reLeft, reRight, imLeft, imRight;
         for (const auto& root : roots)
@@ -517,8 +442,8 @@ int main()
             // Konwersja części urojonej
             const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
-            cout << "Root: [" << reLeft << ", " << reRight << "] + [" 
-                << imLeft << ", " << imRight << "]i" << endl;
+            cout << "Root: " << i << " [" << reLeft << ", " << reRight << "] + [" 
+                << imLeft << ", " << imRight << "]i" << " new ";
         }
         cout << endl;
     }

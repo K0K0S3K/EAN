@@ -74,15 +74,32 @@ class App(customtkinter.CTk):
         self.entry.grid(row=2, column=0,columnspan=3 ,padx=20, pady=20, sticky="new")
 
     def button_callback(self):
-        print("Counting type:", self.counting_frame.get_value())
-        print("Polynomial:", self.entry.get())
+        print(self.counting_frame.get_value())
+        print(self.entry.get())
 
         self.api.send_command(self.counting_frame.get_value())
-        #self.api.send_command(self.input_type_frame.get_value())
         self.api.send_command(self.entry.get())
 
         self.entry_text = self.api.get_data()
+
         print(self.entry_text)
+
+        self.entry_text = self.api.get_data()
+
+        print(self.entry_text)
+
+
+
+        """
+        
+        
+        for i in self.entry_text:
+            
+            if i == '~':
+                print(" ")
+            else:
+                print(i,end="")
+        """
 
         if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
             self.toplevel_window = ResultWindow(results=self.entry_text)
