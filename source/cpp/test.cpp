@@ -382,26 +382,23 @@ int main()
     Interval<long double>::SetMode(PINT_MODE);
 
     vector<vector<Interval<long double>>> tests = {
+// --- STOPIEŃ 3 ---
+
     // 1. x^3 - 3x^2 + 4x - 2 = 0 
     // Pierwiastki: 1.0, 1.0 +/- i
     // Klasyczny test stopnia 3 z jednym pierwiastkiem rzeczywistym i parą zespoloną.
-    // --- STOPIEŃ 3 ---
+    {IntRead<long double>("-2.0"), IntRead<long double>("4.0"), IntRead<long double>("-3.0"), IntRead<long double>("1.0")},
 
-    // 1. x^3 - 2x^2 - x + 2 = 0
-{IntRead<long double>("5.0"), IntRead<long double>("6.0"), IntRead<long double>("2.0")},
-
-    // --- STOPIEŃ 3 ---
-
-    // 2. x^3 - 4x^2 + 9x - 10 = 0
+    // 2. x^3 - 1x^2 + x - 1 = 0
     // Pierwiastki: 2.0, 1.0 +/- 2i
     // Asymetryczny układ: jeden pierwiastek rzeczywisty i "szeroka" para zespolona. 
-    // Sprawdza, czy Bairstow dobrze odseparuje czynnik liniowy na samym końcu po wycięciu czynnika kwadratowego.
-    {IntRead<long double>("-10.0"), IntRead<long double>("9.0"), IntRead<long double>("-4.0"), IntRead<long double>("1.0")},
+    // Sprawdza, czy Bairstow dobrze odseparuje czynnik liniowy na samym końcu.
+    {IntRead<long double>("-1.0"), IntRead<long double>("1.0"), IntRead<long double>("-1.0"), IntRead<long double>("1.0")},
 
     // 3. x^3 + 0.7x^2 - 5.58x + 3.96 = 0
     // Pierwiastki: 1.1, 1.2, -3.0
-    // Bardzo dobry test na stabilność. Dwa pierwiastki rzeczywiste są blisko siebie (1.1 i 1.2). 
-    // Standardowa metoda Newtona często w takich miejscach oscyluje i ma problem z domknięciem przedziału błędu.
+    // Dwa pierwiastki rzeczywiste są blisko siebie (1.1 i 1.2). 
+    // Standardowa metoda Newtona często w takich miejscach oscyluje.
     {IntRead<long double>("3.96"), IntRead<long double>("-5.58"), IntRead<long double>("0.7"), IntRead<long double>("1.0")},
 
     // --- STOPIEŃ 4 ---
@@ -409,25 +406,27 @@ int main()
     // 4. x^4 + 2x^3 + 3x^2 + 2x + 2 = 0
     // Pierwiastki: +/- i, -1.0 +/- i
     // Mieszanka czysto urojonej pary (+/- i) z parą mającą przesunięcie rzeczywiste. 
-    // Algorytm musi poprawnie namierzyć dwa różne czynniki kwadratowe bez potknięcia się na zerowej części rzeczywistej pierwszej pary.
+    // Sprawdza namierzanie czynników kwadratowych przy zerowej części rzeczywistej.
     {IntRead<long double>("2.0"), IntRead<long double>("2.0"), IntRead<long double>("3.0"), IntRead<long double>("2.0"), IntRead<long double>("1.0")},
 
     // 5. x^4 + 3x^3 + 3x^2 - 37x - 78 = 0
     // Pierwiastki: 3.0, -2.0, -2.0 +/- 3i
-    // Solidny test deflacji. Duże współczynniki na końcu (-78, -37). Startowa heurystyka dla r i q (wyciąganie Mid() 
-    // z najwyższych współczynników) musi tutaj dobrze zadziałać, żeby nie wpaść w zbyt długą pętlę Newtona.
+    // Solidny test deflacji z dużymi współczynnikami na końcach.
     {IntRead<long double>("-78.0"), IntRead<long double>("-37.0"), IntRead<long double>("3.0"), IntRead<long double>("3.0"), IntRead<long double>("1.0")},
 
     // --- STOPIEŃ 5 ---
 
     // 6. 2x^5 - 21x^4 + 64x^3 - 31x^2 - 78x + 40 = 0
     // Pierwiastki: -1.0, 0.5, 2.0, 4.0, 5.0
-    // 5 odrębnych pierwiastków rzeczywistych o różnym "rozstrzale" (od -1 do 5, w tym ułamek 0.5). 
-    // Zmusza to metodę Bairstowa do sfabrykowania dwóch czynników kwadratowych ze zlepku tych pierwiastków, 
-    // co przy stopniu nieparzystym i współczynniku kierunkowym równym 2 jest doskonałym sprawdzianem dla całkowitej dokładności programu.
-    {IntRead<long double>("40.0"), IntRead<long double>("-78.0"), IntRead<long double>("-31.0"), IntRead<long double>("64.0"), IntRead<long double>("-21.0"), IntRead<long double>("2.0")}
+    // 5 odrębnych pierwiastków rzeczywistych. Test dokładności przy współczynniku a_n != 1.
+    {IntRead<long double>("40.0"), IntRead<long double>("-78.0"), IntRead<long double>("-31.0"), IntRead<long double>("64.0"), IntRead<long double>("-21.0"), IntRead<long double>("2.0")},
+
+    // --- PRZYPADKI PRZEDZIAŁOWE ---
+
+    // 7. [0.99, 1.01]x^2 + [-5.05, -4.95]x + [5.9, 6.1] = 0
+    // Przybliżone pierwiastki: ~2.0, ~3.0
+    // Test obsługi niepewności dla prostego wielomianu kwadratowego.
     };
-    
 
     for(const auto& coefficients : tests)
     {

@@ -4,67 +4,96 @@ import api
 small_font = ('Arial', 16)
 big_font = ('Arial', 22)
 
+FONT_NORMAL = ("Segoe UI", 14)
+FONT_BOLD = ("Segoe UI", 16, "bold")
+FONT_MONO = ("Consolas", 15)
+
 class ResultWindow(customtkinter.CTkToplevel):
     def __init__(self, results, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("Wyniki Obliczeń - Metoda Bairstowa")
-        # Zwiększamy rozmiar okna, aby pomieściło długie liczby
-        self.geometry("700x400")
-        self.minsize(650, 300)
+        self.geometry("1050x500")
+        self.minsize(600, 400)
+        
+        # Sprawiamy, że okno zawsze pojawia się na wierzchu
+        self.after(100, self.lift)
+        self.attributes("-topmost", True)
 
-        # Nagłówek okna
-        self.title_label = customtkinter.CTkLabel(
+        # Nagłówek
+        self.header_label = customtkinter.CTkLabel(
             self, 
             text="Znalezione Pierwiastki", 
-            font=customtkinter.CTkFont(size=34, weight="bold")
+            font=customtkinter.CTkFont(size=28, weight="bold")
         )
-        self.title_label.pack(pady=(20, 10))
+        self.header_label.pack(pady=(20, 15))
 
-        # Dodajemy scrollowaną ramkę na wypadek wielu pierwiastków
-        self.scrollable_frame = customtkinter.CTkScrollableFrame(self, fg_color="transparent")
+        # Kontener na wyniki
+        self.scrollable_frame = customtkinter.CTkScrollableFrame(
+            self, 
+            fg_color="transparent",
+            label_text="Lista wyników"
+        )
         self.scrollable_frame.pack(padx=20, pady=(0, 20), fill="both", expand=True)
 
-        # Wyświetlanie sformatowanych danych
         self.display_results(results)
 
     def display_results(self, results_text):
-        # 1. Definiujemy czcionki na samym początku (używamy niezawodnych krotek)
-        mono_font = ("Consolas", 20)
-        bold_font = ("Arial", 30, "bold")
+        # Oczyszczenie tekstu i podział na linie
+        # Zamieniamy '?' na nową linię, jeśli API tak przesyła dane
+        clean_text = results_text.replace('?', '\n').strip()
+        lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
 
-        lines = results_text.replace('?', '\n').split('\n')
-        roots = [line.strip() for line in lines if "Root:" in line]
-
-        # 2. Naprawiamy fallback - dodajemy dużą czcionkę i dopisek DEBUG!
-        if not roots:
-            fallback_label = customtkinter.CTkLabel(
-                self.scrollable_frame, 
-                text=f"{results_text}", 
-                wraplength=600,
-                font=mono_font  # Teraz awaryjny tekst TEŻ będzie wielki
-            )
-            fallback_label.pack(padx=10, pady=10)
+        if not lines:
+            self._show_empty_state("Brak danych do wyświetlenia lub błąd formatu.")
             return
 
-        # 3. Główna pętla
-        for root_str in roots:
-            card_frame = customtkinter.CTkFrame(self.scrollable_frame, corner_radius=8)
-            card_frame.pack(padx=10, pady=8, fill="x")
+        # Szukamy linii zawierających słowo "Root" (ignorujemy wielkość liter)
+        roots_found = False
+        for line in lines:
+            if "root" in line.lower():
+                self._create_root_card(line)
+                roots_found = True
+        
+        # Jeśli nie znaleziono słowa "Root", wyświetlamy surowy tekst (np. błąd z API)
+        if not roots_found:
+            self._show_empty_state(clean_text)
+
+    def _create_root_card(self, text):
+        # Rama karty
+        card = customtkinter.CTkFrame(self.scrollable_frame, corner_radius=10)
+        card.pack(padx=5, pady=5, fill="x")
+
+        # Próba oddzielenia "Root X:" od wartości
+        if ":" in text:
+            label_part, value_part = text.split(":", 1)
             
-            parts = root_str.split(" ", 2) 
+            # Etykieta (np. Root 1)
+            lbl = customtkinter.CTkLabel(card, text=label_part.strip() + ":", font=FONT_BOLD, text_color="#1f6aa5")
+            lbl.pack(anchor="w", padx=15, pady=(10, 0))
             
-            if len(parts) >= 3:
-                header_text = f"{parts[0]} {parts[1]}"  # "Root: X"
-                value_text = parts[2]                   # Wartości w nawiasach
-                
-                header_label = customtkinter.CTkLabel(card_frame, text=header_text, font=bold_font)
-                header_label.pack(anchor="w", padx=15, pady=(10, 0))
-                
-                value_label = customtkinter.CTkLabel(card_frame, text=value_text, font=mono_font, justify="left")
-                value_label.pack(anchor="w", padx=15, pady=(2, 10))
-            else:
-                single_label = customtkinter.CTkLabel(card_frame, text=root_str, font=mono_font)
-                single_label.pack(padx=15, pady=10, anchor="w")
+            # Wartość (Liczba / Przedział) - używamy czcionki Mono dla czytelności matematycznej
+            val = customtkinter.CTkLabel(
+                card, 
+                text=value_part.strip(), 
+                font=FONT_MONO, 
+                wraplength=950, 
+                justify="left"
+            )
+            val.pack(anchor="w", padx=15, pady=(0, 10))
+        else:
+            # Fallback dla linii bez dwukropka
+            lbl = customtkinter.CTkLabel(card, text=text, font=FONT_NORMAL)
+            lbl.pack(padx=15, pady=10, anchor="w")
+
+    def _show_empty_state(self, message):
+        error_label = customtkinter.CTkLabel(
+            self.scrollable_frame, 
+            text=message, 
+            font=FONT_NORMAL,
+            wraplength=500,
+            text_color="gray"
+        )
+        error_label.pack(pady=40)
 
 class RadiobtnFrame(customtkinter.CTkFrame):
     def __init__(self, master, title, chechbox_data : list[str]):
@@ -125,32 +154,29 @@ class App(customtkinter.CTk):
         self.entry.grid(row=2, column=0,columnspan=3 ,padx=20, pady=20, sticky="new")
 
     def button_callback(self):
-        print(self.counting_frame.get_value())
-        print(self.entry.get())
+        # 1. Pobranie i wysłanie danych
+        mode = self.counting_frame.get_value()
+        poly_input = self.entry.get()
 
-        self.api.send_command(self.counting_frame.get_value())
-        self.api.send_command(self.entry.get())
-        
-        # Pobieranie danych 
-        # (Uwaga: jeśli po dodaniu 'cout << endl;' w C++ wysyłana jest tylko jedna linia, 
-        # drugie wywołanie get_data() zawiesi program. Zostawiłem oba, ale miej to na uwadze).
-        self.entry_text = self.api.get_data()
-        self.entry_text = self.api.get_data()
-        
-        # Uproszczone wypisywanie do konsoli (zastępuje pętlę for i instrukcje if)
-        self.entry_text = self.entry_text.replace('?', '\n')
-        if self.entry_text:
-            print(self.entry_text)
+        if not poly_input.strip():
+            print("Błąd: Pole wejściowe jest puste")
+            return
 
-        # Logika wywołania nowego okienka z wynikami
-        if self.toplevel_window is None or not self.toplevel_window.winfo_exists():
-            self.toplevel_window = ResultWindow(results=self.entry_text)
-        else:
-            # Okienko istnieje - zamykamy je i tworzymy nowe, aby załadować nowe wyniki
+        self.api.send_command(mode)
+        self.api.send_command(poly_input)
+        
+        # 2. Odbiór danych (zakładając Twoją strukturę API)
+        # Pobieramy dane dwa razy, jeśli API tak wymusza (np. echo + wynik)
+        raw_data = self.api.get_data() 
+        final_result = self.api.get_data() # To zazwyczaj zawiera właściwe wyniki
+
+        # 3. Logika okna
+        if self.toplevel_window is not None:
             self.toplevel_window.destroy()
-            self.toplevel_window = ResultWindow(results=self.entry_text)
             
-        # Przeniesienie focusu na nowo otwarte okno
+        # Tworzymy nowe okno z wynikami
+        # Przekazujemy final_result (lub raw_data, zależnie co zwraca Twoje API)
+        self.toplevel_window = ResultWindow(results=final_result)
         self.toplevel_window.focus()
 
         

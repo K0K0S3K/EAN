@@ -4,9 +4,12 @@
 #include <vector>
 #include <map>
 #include "../../include/mpreal.h"
+#include <fstream>
 
 using namespace std;
 using namespace interval_arithmetic;
+
+std::ofstream dbg("debug.log", std::ios::app);
 
 template<typename T>
 struct complex_interval
@@ -122,8 +125,8 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
     if constexpr (is_same_v<T, long double>)
     {
-        T r = coefficients.at(coefficients.size() - 2) / coefficients.at(coefficients.size() - 1);
-        T q = coefficients.at(coefficients.size() - 3) / coefficients.at(coefficients.size() - 1);
+        r = coefficients.at(coefficients.size() - 2) / coefficients.at(coefficients.size() - 1);
+        q = coefficients.at(coefficients.size() - 3) / coefficients.at(coefficients.size() - 1);
     }
     else if constexpr (is_same_v<T, Interval<long double>>)
     {
@@ -174,16 +177,16 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
             // Jakobian jest osobliwy. Silnie i asymetrycznie zaburzamy punkt startowy,
             // aby wyrzucić Newtona z martwej strefy.
             if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
-                auto new_r = r.Mid() * 1.5 + 0.1234;
-                auto new_q = q.Mid() * 0.5 - 0.4321;
+                auto new_r = r.Mid() * 1.5 + (rand() % 100) / 100.0;
+                auto new_q = q.Mid() * 0.5 - (rand() % 100) / 100.0;
                 
                 r.a = new_r; 
                 r.b = new_r;
                 q.a = new_q; 
                 q.b = new_q;
             } else {
-                r = r * 1.5 + 0.1234;
-                q = q * 0.5 - 0.4321;
+                r = r * 1.5 + (rand() % 100) / 100.0;
+                q = q * 0.5 - (rand() % 100) / 100.0;
             }
             // Przerywamy obecne obliczenia dr i dq, wracamy na początek pętli
             continue; 
@@ -400,9 +403,10 @@ vector<T> parse_polynom(const string polynom_str, int arithmetic)
             string coeff_str = token.substr(0, x_pos);
 
             int degree = stoi(token.substr(x_pos + 1));
-            T coeff = static_cast<T>(stod(coeff_str));
+            Interval<long double> t = IntRead<long double>(coeff_str);
 
-            temp[degree] = coeff;
+
+            temp[degree] = t.Mid();
             max_degree = max(max_degree, degree);
         }
         
@@ -469,11 +473,15 @@ vector<T> parse_polynom(const string polynom_str, int arithmetic)
     return result;
 }
 
+
 int main()
 {
-    int max_iter = 20;
-    long double p1 = 1e-16;
-    long double p2 = 1e-16;
+    dbg = std::ofstream("/home/adam/Programowanie/EAN/source/cpp/debug.log", std::ios::app);
+    dbg << "=== NOWY TEST ===" << std::endl;
+
+    int max_iter = 250;
+    long double p1 = 1e-15;
+    long double p2 = 1e-15;
 
     int arithmetic;
     string polynom;
@@ -484,6 +492,7 @@ int main()
     {
         cin >> arithmetic;
         getline(cin >> ws, polynom);
+        dbg << "Otrzymany string: [" << polynom << "]" << std::endl;
 
         cout << "DOING" << endl;
 
@@ -500,6 +509,17 @@ int main()
                 vector<long double> polynominal = parse_polynom<long double>(polynom,arithmetic);
                 vector<complex_interval<long double>> result = bairstow_method<long double>(polynominal.size() - 1, polynominal,max_iter,p1,p2);
                 
+                dbg << "Wektor po sparsowaniu: ";
+                for(auto v : polynominal) dbg << v << " ";
+                    dbg << std::endl;
+
+                dbg << "Output bairstowa: ";
+                for(auto v : result) 
+                {
+                    dbg << v.real << " + " << v.imag << "i" << endl;
+                }
+                dbg.flush();
+
                 int i = 1;
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
