@@ -427,10 +427,11 @@ int main()
     // co przy stopniu nieparzystym i współczynniku kierunkowym równym 2 jest doskonałym sprawdzianem dla całkowitej dokładności programu.
     {IntRead<long double>("40.0"), IntRead<long double>("-78.0"), IntRead<long double>("-31.0"), IntRead<long double>("64.0"), IntRead<long double>("-21.0"), IntRead<long double>("2.0")}
     };
-    int i = 1;
+    
 
     for(const auto& coefficients : tests)
     {
+        int i = 1;
         vector<complex_interval<Interval<long double>>> roots = bairstow_method<Interval<long double>>(coefficients.size() - 1, coefficients,150, 1e-11,1e-11);
 
         string reLeft, reRight, imLeft, imRight;
@@ -442,8 +443,8 @@ int main()
             // Konwersja części urojonej
             const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
-            cout << "Root: " << i << " [" << reLeft << ", " << reRight << "] + [" 
-                << imLeft << ", " << imRight << "]i" << " new ";
+            cout << "Root: " << i++ << " [" << reLeft << ", " << reRight << "] + [" 
+                << imLeft << ", " << imRight << "]i" << endl;
         }
         cout << endl;
     }

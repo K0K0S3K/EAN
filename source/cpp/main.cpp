@@ -487,6 +487,12 @@ int main()
 
         cout << "DOING" << endl;
 
+        if(polynom.size() == 0)
+        {
+            cout << "ERROR" << endl;
+            continue;
+        }
+
         switch (arithmetic)
         {
             case RealNum: 
@@ -498,13 +504,46 @@ int main()
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
                 {
-                    cout << "Root: " << i++ << " " << root.real << " + " 
-                        << root.imag << "i" << " ? ";
+
+                    Interval<long double> real;
+                    Interval<long double> imag;
+
+                    real.a = root.real + 0;
+                    real.b = root.real + 0;
+
+                    imag.a = root.imag + 0;
+                    imag.b = root.imag + 0;
+
+                    bool minus = false;
+
+                    if(imag.Mid() < 0)
+                    {
+                        imag = imag * -1;
+                        minus = true;
+                    }
+
+                    const_cast<Interval<long double>&>(real).IEndsToStrings(reLeft, reRight);
+                    const_cast<Interval<long double>&>(imag).IEndsToStrings(imLeft, imRight);
+
+                    if(minus)
+                    {
+                        cout << "Root " << i++  <<  " : " << reLeft << " - " 
+                    << imLeft << "i" << " ?";
+                    }
+                    else
+                    {
+                        cout << "Root " << i++  <<  " : " << reLeft << " + " 
+                    << imLeft << "i" << " ?";
+                    }
+
+                    
                 }
+
+                cout << endl;
                 break;
             }
 
-            cout << endl;
+            
 
             case IntervalForRealNum:
             {
@@ -518,8 +557,8 @@ int main()
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
-                    cout << "Root: " << i++ << " [" << reLeft << ", " << reRight << "] + [" 
-                        << imLeft << ", " << imRight << "]i" << " ? ";
+                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
+                        << imLeft << ", " << imRight << "]i" << " ?";
                 }
                 
                 cout << endl;
@@ -538,8 +577,8 @@ int main()
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
-                    cout << "Root: " << i++ << " [" << reLeft << ", " << reRight << "] + [" 
-                        << imLeft << ", " << imRight << "]i" << " ? ";
+                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
+                        << imLeft << ", " << imRight << "]i" << " ?";
                 }
 
                 cout << endl;

@@ -15,7 +15,7 @@ class API:
                 )
         #self.run_algorithm()
 
-        print(self.get_data())
+        self.get_data()
 
 
     def send_command(self, cmd):
