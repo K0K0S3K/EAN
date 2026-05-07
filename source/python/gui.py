@@ -15,11 +15,9 @@ class ResultWindow(customtkinter.CTkToplevel):
         self.geometry("1050x500")
         self.minsize(600, 400)
         
-        # Sprawiamy, że okno zawsze pojawia się na wierzchu
         self.after(100, self.lift)
         self.attributes("-topmost", True)
 
-        # Nagłówek
         self.header_label = customtkinter.CTkLabel(
             self, 
             text="Znalezione Pierwiastki", 
@@ -27,7 +25,6 @@ class ResultWindow(customtkinter.CTkToplevel):
         )
         self.header_label.pack(pady=(20, 15))
 
-        # Kontener na wyniki
         self.scrollable_frame = customtkinter.CTkScrollableFrame(
             self, 
             fg_color="transparent",
@@ -38,8 +35,6 @@ class ResultWindow(customtkinter.CTkToplevel):
         self.display_results(results)
 
     def display_results(self, results_text):
-        # Oczyszczenie tekstu i podział na linie
-        # Zamieniamy '?' na nową linię, jeśli API tak przesyła dane
         clean_text = results_text.replace('?', '\n').strip()
         lines = [line.strip() for line in clean_text.split('\n') if line.strip()]
 
@@ -47,31 +42,25 @@ class ResultWindow(customtkinter.CTkToplevel):
             self._show_empty_state("Brak danych do wyświetlenia lub błąd formatu.")
             return
 
-        # Szukamy linii zawierających słowo "Root" (ignorujemy wielkość liter)
         roots_found = False
         for line in lines:
             if "root" in line.lower():
                 self._create_root_card(line)
                 roots_found = True
         
-        # Jeśli nie znaleziono słowa "Root", wyświetlamy surowy tekst (np. błąd z API)
         if not roots_found:
             self._show_empty_state(clean_text)
 
     def _create_root_card(self, text):
-        # Rama karty
         card = customtkinter.CTkFrame(self.scrollable_frame, corner_radius=10)
         card.pack(padx=5, pady=5, fill="x")
 
-        # Próba oddzielenia "Root X:" od wartości
         if ":" in text:
             label_part, value_part = text.split(":", 1)
             
-            # Etykieta (np. Root 1)
             lbl = customtkinter.CTkLabel(card, text=label_part.strip() + ":", font=FONT_BOLD, text_color="#1f6aa5")
             lbl.pack(anchor="w", padx=15, pady=(10, 0))
             
-            # Wartość (Liczba / Przedział) - używamy czcionki Mono dla czytelności matematycznej
             val = customtkinter.CTkLabel(
                 card, 
                 text=value_part.strip(), 
@@ -81,7 +70,6 @@ class ResultWindow(customtkinter.CTkToplevel):
             )
             val.pack(anchor="w", padx=15, pady=(0, 10))
         else:
-            # Fallback dla linii bez dwukropka
             lbl = customtkinter.CTkLabel(card, text=text, font=FONT_NORMAL)
             lbl.pack(padx=15, pady=10, anchor="w")
 
@@ -164,18 +152,12 @@ class App(customtkinter.CTk):
 
         self.api.send_command(mode)
         self.api.send_command(poly_input)
-        
-        # 2. Odbiór danych (zakładając Twoją strukturę API)
-        # Pobieramy dane dwa razy, jeśli API tak wymusza (np. echo + wynik)
-        raw_data = self.api.get_data() 
-        final_result = self.api.get_data() # To zazwyczaj zawiera właściwe wyniki
+    
+        final_result = self.api.get_data()
 
-        # 3. Logika okna
         if self.toplevel_window is not None:
             self.toplevel_window.destroy()
             
-        # Tworzymy nowe okno z wynikami
-        # Przekazujemy final_result (lub raw_data, zależnie co zwraca Twoje API)
         self.toplevel_window = ResultWindow(results=final_result)
         self.toplevel_window.focus()
 

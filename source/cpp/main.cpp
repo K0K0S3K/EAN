@@ -162,20 +162,14 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
         T denominator = Ar * Bq - Aq * Br;
 
-        
-        // Sprawdzenie, czy wyznacznik zawiera zero
         bool contains_zero = false;
         if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
             contains_zero = (denominator.a <= 0 && denominator.b >= 0);
         } else {
-            // Zabezpieczenie przed epsilonem maszynowym dla zwykłych typów
             contains_zero = (abs(denominator) < 1e-14); 
         }
 
-        // Logika ratunkowa
         if (contains_zero) {
-            // Jakobian jest osobliwy. Silnie i asymetrycznie zaburzamy punkt startowy,
-            // aby wyrzucić Newtona z martwej strefy.
             if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
                 auto new_r = r.Mid() * 1.5 + (rand() % 100) / 100.0;
                 auto new_q = q.Mid() * 0.5 - (rand() % 100) / 100.0;
@@ -188,11 +182,9 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
                 r = r * 1.5 + (rand() % 100) / 100.0;
                 q = q * 0.5 - (rand() % 100) / 100.0;
             }
-            // Przerywamy obecne obliczenia dr i dq, wracamy na początek pętli
             continue; 
         }
 
-        // Dopiero gdy jesteśmy bezpieczni, wykonujemy dzielenie
         if constexpr (is_same_v<T, Interval<long double>>) {
             denominator = IntRead<long double>("1") / denominator;    
         } else {
@@ -305,20 +297,18 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
             r2.imag = IntRead<long double>("0");
         }
         else if (delta.b < 0) {
-            // Czysto ujemna delta (pełne zespolone)
             r1.real = -1 * b / (2 * a);
             r1.imag = ISqrt((-1 * delta), x) / (2 * a);
             r2.real = r1.real;
             r2.imag = -1 * r1.imag;
         }
         else {
-            // delta przecina zero (np. a < 0, b >= 0). Tniemy ją na dwie osobne obwiednie.
             T delta_pos = delta; 
-            delta_pos.a = 0; // Ucinamy część ujemną dla dziedziny rzeczywistej
+            delta_pos.a = 0; 
             
             T delta_neg = delta; 
-            delta_neg.b = 0; // Ucinamy część dodatnią
-            delta_neg = -1 * delta_neg; // Robimy z niej dodatnią pod pierwiastek zespolony
+            delta_neg.b = 0; 
+            delta_neg = -1 * delta_neg;
 
             r1.real = (-1 * b + ISqrt(delta_pos, x)) / (2 * a);
             r2.real = (-1 * b - ISqrt(delta_pos, x)) / (2 * a);
@@ -374,6 +364,27 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
 
     vector<complex_interval<T>> rest = bairstow_method<T>(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, tolerance, zerodet);
     output.insert(output.end(), rest.begin(), rest.end());
+
+    
+
+    for(auto &i : output)
+    {
+        if constexpr (is_same_v<T, long double>)
+        {
+            if(abs(i.real) < zerodet)
+                i.real = 0;
+            if(abs(i.imag) < zerodet)
+                i.imag = 0;
+        }
+        else if constexpr (is_same_v<T, Interval<long double>>)
+        {
+            if(abs(i.real.Mid()) < zerodet && abs(i.real.GetWidth()) < zerodet * 2)
+                i.real = IntRead<long double>("0.0");
+            if(abs(i.imag.Mid()) < zerodet && abs(i.imag.GetWidth()) < zerodet * 2)
+                i.imag = IntRead<long double>("0.0");
+
+        }
+    }
 
     return output;
 }
@@ -480,8 +491,8 @@ int main()
     dbg << "=== NOWY TEST ===" << std::endl;
 
     int max_iter = 250;
-    long double p1 = 1e-15;
-    long double p2 = 1e-15;
+    long double p1 = 1e-14;
+    long double p2 = 1e-14;
 
     int arithmetic;
     string polynom;
@@ -493,8 +504,6 @@ int main()
         cin >> arithmetic;
         getline(cin >> ws, polynom);
         dbg << "Otrzymany string: [" << polynom << "]" << std::endl;
-
-        cout << "DOING" << endl;
 
         if(polynom.size() == 0)
         {
@@ -577,6 +586,9 @@ int main()
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
+                    long double realWidth = IntWidth(root.real);
+                    long double imagWidth = IntWidth(root.imag);
+
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
                         << imLeft << ", " << imRight << "]i" << " ?";
                 }
@@ -596,6 +608,9 @@ int main()
                 {
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
+
+                    long double realWidth = IntWidth(root.real);
+                    long double imagWidth = IntWidth(root.imag);
 
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
                         << imLeft << ", " << imRight << "]i" << " ?";
