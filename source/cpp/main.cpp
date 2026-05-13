@@ -5,6 +5,7 @@
 #include <map>
 #include "../../include/mpreal.h"
 #include <fstream>
+#include <cmath>
 
 using namespace std;
 using namespace interval_arithmetic;
@@ -327,7 +328,7 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
 
 
 template<typename T>
-vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, long double tolerance, long double zerodet)
+vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, long double tolerance, long double zero)
 {
     vector<complex_interval<T>> output;
 
@@ -338,12 +339,12 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
 
     if (degree == 1)
     {
-        return first_degree_roots<T>(coefficients, zerodet);
+        return first_degree_roots<T>(coefficients, zero);
     }
 
     if (degree == 2)
     {
-        return second_degree_roots<T>(coefficients, zerodet);
+        return second_degree_roots<T>(coefficients, zero);
     }
 
     newton_output result = newton<T>(coefficients, max_iterations, tolerance);
@@ -359,10 +360,10 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
         a_coef = IntRead<long double>("1.0");
     }
 
-    vector<complex_interval<T>> temp = second_degree_roots<T>({-1 * result.q, -1 * result.r, a_coef}, zerodet);
+    vector<complex_interval<T>> temp = second_degree_roots<T>({-1 * result.q, -1 * result.r, a_coef}, zero);
     output.insert(output.end(), temp.begin(), temp.end());
 
-    vector<complex_interval<T>> rest = bairstow_method<T>(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, tolerance, zerodet);
+    vector<complex_interval<T>> rest = bairstow_method<T>(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, tolerance, zero);
     output.insert(output.end(), rest.begin(), rest.end());
 
     
@@ -371,16 +372,16 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
     {
         if constexpr (is_same_v<T, long double>)
         {
-            if(abs(i.real) < zerodet)
+            if(abs(i.real) < zero)
                 i.real = 0;
-            if(abs(i.imag) < zerodet)
+            if(abs(i.imag) < zero)
                 i.imag = 0;
         }
         else if constexpr (is_same_v<T, Interval<long double>>)
         {
-            if(abs(i.real.Mid()) < zerodet && abs(i.real.GetWidth()) < zerodet * 2)
+            if(abs(i.real.Mid()) < zero && abs(i.real.GetWidth()) < zero * 2)
                 i.real = IntRead<long double>("0.0");
-            if(abs(i.imag.Mid()) < zerodet && abs(i.imag.GetWidth()) < zerodet * 2)
+            if(abs(i.imag.Mid()) < zerodet && abs(i.imag.GetWidth()) < zero * 2)
                 i.imag = IntRead<long double>("0.0");
 
         }
@@ -484,6 +485,28 @@ vector<T> parse_polynom(const string polynom_str, int arithmetic)
     return result;
 }
 
+string format_IntWidth(long double width, int precision)
+{
+    long double multiplier = std::pow(10, precision);
+    long double rounded_width = roundl(width * multiplier) / multiplier;
+
+    // 2. Reszta Twojej logiki z wykorzystaniem biblioteki
+    Interval<long double> x;
+    x.a = rounded_width;
+    x.b = rounded_width;
+
+    string w, temp;
+    // const_cast nie jest tu potrzebny, IEndsToStrings nie jest const, 
+    // ale x i tak nie jest stałą w tej funkcji
+    x.IEndsToStrings(w, temp);
+
+    // 3. Twoje wycinanie formatu EX
+    // temp zawiera teraz zaokrągloną wartość dzięki krokowi nr 1
+    w = temp.substr(0, precision + 2) + temp.substr(temp.rfind('E'));
+
+    return w;
+}
+
 
 int main()
 {
@@ -493,6 +516,7 @@ int main()
     int max_iter = 250;
     long double p1 = 1e-14;
     long double p2 = 1e-14;
+    const int precision = 2;
 
     int arithmetic;
     string polynom;
@@ -586,11 +610,12 @@ int main()
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
-                    long double realWidth = IntWidth(root.real);
-                    long double imagWidth = IntWidth(root.imag);
+                    string realWidth = format_IntWidth(IntWidth(root.real),precision);
+                    string imagWidth = format_IntWidth(IntWidth(root.real),precision);
 
-                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
-                        << imLeft << ", " << imRight << "]i" << " ?";
+
+                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 
+                        << imLeft << ", " << imRight << "]i (w: " << realWidth << ") ?";
                 }
                 
                 cout << endl;
@@ -606,14 +631,12 @@ int main()
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
                 {
-                    const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
-                    const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
+                    string realWidth = format_IntWidth(IntWidth(root.real),precision);
+                    string imagWidth = format_IntWidth(IntWidth(root.real),precision);
 
-                    long double realWidth = IntWidth(root.real);
-                    long double imagWidth = IntWidth(root.imag);
 
-                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] + [" 
-                        << imLeft << ", " << imRight << "]i" << " ?";
+                    cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 
+                        << imLeft << ", " << imRight << "]i (w: " << realWidth << ") ?";
                 }
 
                 cout << endl;

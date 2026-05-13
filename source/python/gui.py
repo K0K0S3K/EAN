@@ -12,7 +12,7 @@ class ResultWindow(customtkinter.CTkToplevel):
     def __init__(self, results, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("Wyniki Obliczeń - Metoda Bairstowa")
-        self.geometry("1050x500")
+        self.geometry("1200x500")
         self.minsize(600, 400)
         
         self.after(100, self.lift)
@@ -65,7 +65,7 @@ class ResultWindow(customtkinter.CTkToplevel):
                 card, 
                 text=value_part.strip(), 
                 font=FONT_MONO, 
-                wraplength=950, 
+                wraplength=1150, 
                 justify="left"
             )
             val.pack(anchor="w", padx=15, pady=(0, 10))
