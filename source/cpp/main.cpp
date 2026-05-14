@@ -381,7 +381,7 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
         {
             if(abs(i.real.Mid()) < zero && abs(i.real.GetWidth()) < zero * 2)
                 i.real = IntRead<long double>("0.0");
-            if(abs(i.imag.Mid()) < zerodet && abs(i.imag.GetWidth()) < zero * 2)
+            if(abs(i.imag.Mid()) < zero && abs(i.imag.GetWidth()) < zero * 2)
                 i.imag = IntRead<long double>("0.0");
 
         }
@@ -611,7 +611,7 @@ int main()
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
                     string realWidth = format_IntWidth(IntWidth(root.real),precision);
-                    string imagWidth = format_IntWidth(IntWidth(root.real),precision);
+                    string imagWidth = format_IntWidth(IntWidth(root.imag),precision);
 
 
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 
@@ -631,8 +631,12 @@ int main()
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
                 {
+
+                    const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
+                    const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
+
                     string realWidth = format_IntWidth(IntWidth(root.real),precision);
-                    string imagWidth = format_IntWidth(IntWidth(root.real),precision);
+                    string imagWidth = format_IntWidth(IntWidth(root.imag),precision);
 
 
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 

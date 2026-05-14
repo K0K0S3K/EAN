@@ -20,6 +20,8 @@
 !*.H
 !*.py
 !*.PY
+!*.tex
+!*.pdf
 
 # Ignoruj środowisko wirtualne
 ean/
