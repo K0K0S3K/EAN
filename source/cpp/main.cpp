@@ -116,12 +116,10 @@ T B_(T r, T q, vector<T> &b_values, vector<T> &c_values, int degree)
 //funkcja implementująca metodę Newtona dla dwóch zmiennych, trzeba się jej przyjrzeć
 //może być problem związany z warunkiem zatrzymania
 template<typename T>
-newton_output<T> newton(vector<T> coefficients, int max_iterations, long double tolerance)
+newton_output<T> newton(vector<T> coefficients, int max_iterations, long double zerodet, long double relative_error, int &st, int &it, int input_type)
 {
     newton_output<T> output;
-
     int degree = (int)coefficients.size() - 1;
-
     T q, r;
 
     if constexpr (is_same_v<T, long double>)
@@ -131,22 +129,38 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
     }
     else if constexpr (is_same_v<T, Interval<long double>>)
     {
-        long double r_mid = coefficients.at(coefficients.size() - 2).Mid() / coefficients.at(coefficients.size() - 1).Mid();
-        long double q_mid = coefficients.at(coefficients.size() - 3).Mid() / coefficients.at(coefficients.size() - 1).Mid();
+        if(input_type == 1)
+        {
+            long double r_mid = coefficients.at(coefficients.size() - 2).Mid() / coefficients.at(coefficients.size() - 1).Mid();
+            long double q_mid = coefficients.at(coefficients.size() - 3).Mid() / coefficients.at(coefficients.size() - 1).Mid();
 
-        r.a = r_mid;
-        r.b = r_mid;
+            r.a = r_mid;
+            r.b = r_mid;
+            q.a = q_mid;
+            q.b = q_mid;
+        } 
+        else
+        {
+            r = coefficients.at(coefficients.size() - 2) / coefficients.at(coefficients.size() - 1);
+            q = coefficients.at(coefficients.size() - 3) / coefficients.at(coefficients.size() - 1);
+        }
 
-        q.a = q_mid;
-        q.b = q_mid;
+
+        
     }
-
-   
 
     vector<T> b_values(coefficients.size());
     vector<T> c_values(coefficients.size());
+    
+    // Inicjalizacja domyślnie na błąd limitu iteracji (odpowiednik st=3)
+    bool ISi3 = true; 
+    int iter = 0;
 
-    for(int iter = 0; iter < max_iterations; iter++)
+    // Zmienne z Pascala do śledzenia historii wielkości kroku (odpowiedniki pq0 i pq1)
+    long double prev_dr_mag = 1.0e63;
+    long double prev_dq_mag = 1.0e63;
+
+    for(iter = 0; iter < max_iterations; iter++)
     {
         b(r, q, b_values, coefficients);
         c(r, q, c_values, b_values);
@@ -163,27 +177,17 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
         T denominator = Ar * Bq - Aq * Br;
 
+        // Poprawiony warunek dla dzielenia przez przedział przecinający zero
         bool contains_zero = false;
-        if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
-            contains_zero = (denominator.a <= 0 && denominator.b >= 0);
+        if constexpr(is_same_v<T, Interval<long double>>) {
+            contains_zero = (denominator.a <= zerodet && denominator.b >= -zerodet);
         } else {
-            contains_zero = (abs(denominator) < 1e-14); 
+            contains_zero = (abs(denominator) < zerodet); 
         }
 
         if (contains_zero) {
-            if constexpr(is_same_v<T, Interval<mpreal>> || is_same_v<T, Interval<long double>>) {
-                auto new_r = r.Mid() * 1.5 + (rand() % 100) / 100.0;
-                auto new_q = q.Mid() * 0.5 - (rand() % 100) / 100.0;
-                
-                r.a = new_r; 
-                r.b = new_r;
-                q.a = new_q; 
-                q.b = new_q;
-            } else {
-                r = r * 1.5 + (rand() % 100) / 100.0;
-                q = q * 0.5 - (rand() % 100) / 100.0;
-            }
-            continue; 
+            st = 2;
+            return output;
         }
 
         if constexpr (is_same_v<T, Interval<long double>>) {
@@ -195,42 +199,100 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
         T dr = (A_val * Bq - Aq * B_val) * denominator;
         T dq = (Ar * B_val - A_val * Br) * denominator;
 
-        r = r - dr;
-        q = q - dq;
 
-        if constexpr (is_same_v<T, Interval<long double>>)
-        {
-            long double mid_r = r.Mid();
-            long double mid_q = q.Mid();
-            
-            r.a = mid_r;
-            r.b = mid_r;
-            q.a = mid_q;
-            q.b = mid_q;
-        }
-
+        // Mierzymy moduł bieżącego kroku
+        long double dr_mag, dq_mag;
+        
+        // Zmienne dla warunków przedziałowych
+        bool function_contains_zero = false;
+        bool step_contains_zero = false;
 
         if constexpr(is_same_v<T, Interval<long double>>) {
-            if (abs(dr.Mid()) < tolerance && abs(dq.Mid()) < tolerance) 
-                break;
+            // Bezpieczny moduł - bierzemy maksymalne wychylenie przedziału (najgorszy przypadek)
+            dr_mag = std::max(std::abs(dr.a), std::abs(dr.b));
+            dq_mag = std::max(std::abs(dq.a), std::abs(dq.b));
+            
+            // Sprawdzamy czy wartości funkcji A(r,q) i B(r,q) przecięły zero
+            function_contains_zero = (A_val.a <= relative_error && A_val.b >= relative_error) && 
+                                     (B_val.a <= relative_error && B_val.b >= relative_error);
+                                     
+            // Sprawdzamy czy wektor kroku utonął w szumie numerycznym
+            step_contains_zero = (dr.a <= relative_error && dr.b >= relative_error) && (dq.a <= relative_error && dq.b >= relative_error);
         } else {
-            if (abs(dr) < tolerance && abs(dq) < tolerance) 
-                break;
+            dr_mag = std::abs(dr);
+            dq_mag = std::abs(dq);
         }
+
+        // --- WARUNKI ZATRZYMANIA ---
+        bool stop_condition_met = false;
+        
+        if constexpr(is_same_v<T, Interval<long double>>) {
+            // Przerywamy, gdy:
+            // 1. Zeszliśmy poniżej zakładanego błędu (relative_error)
+            // 2. LUB trafiliśmy w idealne zero numeryczne (function_contains_zero)
+            // 3. LUB krok ma mniejszą wartość niż szum obliczeniowy (step_contains_zero)
+            stop_condition_met = (dr_mag <= relative_error && dq_mag <= relative_error) || 
+                                 function_contains_zero || 
+                                 step_contains_zero;
+        } else {
+            // Standardowy warunek dla double (zatrzymaj jeśli błąd jest mały I przestał maleć)
+            stop_condition_met = (dr_mag <= relative_error && dq_mag <= relative_error) && 
+                                 (dr_mag >= prev_dr_mag || dq_mag >= prev_dq_mag);
+        }
+
+        if (!stop_condition_met)
+        {
+            // Aplikacja kroku Newtona
+            r = r - dr;
+            q = q - dq;
+            
+            // Zapisanie bieżącego kroku do historii
+            prev_dr_mag = dr_mag;
+            prev_dq_mag = dq_mag;
+
+            // Spłaszczenie przedziałów
+            if constexpr (is_same_v<T, Interval<long double>>)
+            {
+                long double mid_r = r.Mid();
+                long double mid_q = q.Mid();
+                
+                r.a = mid_r;
+                r.b = mid_r;
+                q.a = mid_q;
+                q.b = mid_q;
+            }
+        }
+        else
+        {
+            // Pętla przerywana - osiągnęliśmy precyzję, zero maszynowe lub stagnację
+            ISi3 = false;
+            break;
+        }
+
+        
+    }
+
+    
+
+    it = iter;
+
+    if(ISi3)
+    {
+        st = 3;
+        return output;
     }
 
     output.r = r;
     output.q = q;
-    output.coefficients = vector<T>(b_values.begin(),b_values.end() - 2);
+    output.coefficients = vector<T>(b_values.begin(), b_values.end() - 2);
 
     reverse(output.coefficients.begin(), output.coefficients.end());
 
     return output;
-
 }
 
 template<typename T>
-vector<complex_interval<T>> first_degree_roots(vector<T> coefficients, long double zero)
+vector<complex_interval<T>> first_degree_roots(vector<T> coefficients)
 {
     vector<complex_interval<T>> output;
 
@@ -253,7 +315,7 @@ vector<complex_interval<T>> first_degree_roots(vector<T> coefficients, long doub
 }
 
 template<typename T>
-vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long double zero)
+vector<complex_interval<T>> second_degree_roots(vector<T> coefficients)
 {
     vector<complex_interval<T>> output;
 
@@ -328,7 +390,7 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients, long dou
 
 
 template<typename T>
-vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, long double tolerance, long double zero)
+vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, int relative_error,long double zerodet, int &st, int &it, int input_type)
 {
     vector<complex_interval<T>> output;
 
@@ -339,15 +401,20 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
 
     if (degree == 1)
     {
-        return first_degree_roots<T>(coefficients, zero);
+        return first_degree_roots<T>(coefficients);
     }
 
     if (degree == 2)
     {
-        return second_degree_roots<T>(coefficients, zero);
+        return second_degree_roots<T>(coefficients);
     }
 
-    newton_output result = newton<T>(coefficients, max_iterations, tolerance);
+    newton_output result = newton<T>(coefficients, max_iterations, zerodet,relative_error,st,it,input_type);
+
+    if(st != 0)
+    {
+        return output;
+    }
 
     T a_coef;
 
@@ -360,32 +427,11 @@ vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, 
         a_coef = IntRead<long double>("1.0");
     }
 
-    vector<complex_interval<T>> temp = second_degree_roots<T>({-1 * result.q, -1 * result.r, a_coef}, zero);
+    vector<complex_interval<T>> temp = second_degree_roots<T>({-1 * result.q, -1 * result.r, a_coef});
     output.insert(output.end(), temp.begin(), temp.end());
 
-    vector<complex_interval<T>> rest = bairstow_method<T>(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, tolerance, zero);
+    vector<complex_interval<T>> rest = bairstow_method<T>(static_cast<int>(result.coefficients.size() - 1), result.coefficients, max_iterations, relative_error, zerodet,st,it,input_type);
     output.insert(output.end(), rest.begin(), rest.end());
-
-    
-
-    for(auto &i : output)
-    {
-        if constexpr (is_same_v<T, long double>)
-        {
-            if(abs(i.real) < zero)
-                i.real = 0;
-            if(abs(i.imag) < zero)
-                i.imag = 0;
-        }
-        else if constexpr (is_same_v<T, Interval<long double>>)
-        {
-            if(abs(i.real.Mid()) < zero && abs(i.real.GetWidth()) < zero * 2)
-                i.real = IntRead<long double>("0.0");
-            if(abs(i.imag.Mid()) < zero && abs(i.imag.GetWidth()) < zero * 2)
-                i.imag = IntRead<long double>("0.0");
-
-        }
-    }
 
     return output;
 }
@@ -487,24 +533,27 @@ vector<T> parse_polynom(const string polynom_str, int arithmetic)
 
 string format_IntWidth(long double width, int precision)
 {
-    long double multiplier = std::pow(10, precision);
-    long double rounded_width = roundl(width * multiplier) / multiplier;
-
-    // 2. Reszta Twojej logiki z wykorzystaniem biblioteki
     Interval<long double> x;
-    x.a = rounded_width;
-    x.b = rounded_width;
+    x.a = width;
+    x.b = width;
 
     string w, temp;
-    // const_cast nie jest tu potrzebny, IEndsToStrings nie jest const, 
-    // ale x i tak nie jest stałą w tej funkcji
+
     x.IEndsToStrings(w, temp);
 
-    // 3. Twoje wycinanie formatu EX
-    // temp zawiera teraz zaokrągloną wartość dzięki krokowi nr 1
-    w = temp.substr(0, precision + 2) + temp.substr(temp.rfind('E'));
+    std::string number_part = w.substr(0, w.rfind('E'));
+    std::string ex_part = w.substr(w.rfind('E'));
 
-    return w;
+    double float_data = std::stod(number_part);
+    
+    std::ostringstream stream;
+
+    stream << std::fixed << std::setprecision(precision) << float_data;
+
+    std::string float_formatted_data = stream.str();
+    std::string final_result = float_formatted_data + ex_part;
+
+    return final_result;
 }
 
 
@@ -513,11 +562,6 @@ int main()
     dbg = std::ofstream("/home/adam/Programowanie/EAN/source/cpp/debug.log", std::ios::app);
     dbg << "=== NOWY TEST ===" << std::endl;
 
-    int max_iter = 250;
-    long double p1 = 1e-14;
-    long double p2 = 1e-14;
-    const int precision = 2;
-
     int arithmetic;
     string polynom;
 
@@ -525,22 +569,40 @@ int main()
 
     while (true)
     {
+        int max_iter = 5;
+        long double zerodet = 1e-16;
+        long double relative_error = 1e-16;
+
+        int it = 0;
+        int st = 0;
+        const int precision = 1;
+
+
+
         cin >> arithmetic;
         getline(cin >> ws, polynom);
+        cin >> max_iter;
+        cin >> relative_error;
+        cin >> zerodet;
         dbg << "Otrzymany string: [" << polynom << "]" << std::endl;
-
-        if(polynom.size() == 0)
-        {
-            cout << "ERROR" << endl;
-            continue;
-        }
 
         switch (arithmetic)
         {
             case RealNum: 
             {
                 vector<long double> polynominal = parse_polynom<long double>(polynom,arithmetic);
-                vector<complex_interval<long double>> result = bairstow_method<long double>(polynominal.size() - 1, polynominal,max_iter,p1,p2);
+                if(polynominal.size() < 2 || max_iter < 1 || relative_error <= 0 || zerodet <= 0)
+                {
+                    cout << "st = 1" << endl;
+                    continue;
+                }
+                vector<complex_interval<long double>> result = bairstow_method<long double>(polynominal.size() - 1, polynominal,max_iter,relative_error,zerodet,st,it,arithmetic);
+
+                if(st != 0)
+                {
+                    cout << "st = " << st << endl;
+                    break;
+                }
                 
                 dbg << "Wektor po sparsowaniu: ";
                 for(auto v : polynominal) dbg << v << " ";
@@ -581,18 +643,19 @@ int main()
                     if(minus)
                     {
                         cout << "Root " << i++  <<  " : " << reLeft << " - " 
-                    << imLeft << "i" << " ?";
+                    << imLeft << "i" << " ? ";
                     }
                     else
                     {
                         cout << "Root " << i++  <<  " : " << reLeft << " + " 
-                    << imLeft << "i" << " ?";
+                    << imLeft << "i" << " ? ";
                     }
 
                     
                 }
 
-                cout << endl;
+                cout << "st = 0, it = " << it << "?" <<endl;
+
                 break;
             }
 
@@ -601,8 +664,19 @@ int main()
             case IntervalForRealNum:
             {
                 vector<Interval<long double>> polynominal = parse_polynom<Interval<long double>>(polynom,arithmetic);
-                vector<complex_interval<Interval<long double>>> result = bairstow_method<Interval<long double>>(polynominal.size() - 1, polynominal,max_iter,p1,p2);
+                if(polynominal.size() < 2 || max_iter < 1 || relative_error <= 0 || zerodet <= 0)
+                {
+                    cout << "st = 1" << endl;
+                    continue;
+                }
+                vector<complex_interval<Interval<long double>>> result = bairstow_method<Interval<long double>>(polynominal.size() - 1, polynominal,max_iter,relative_error,zerodet,st,it,arithmetic);
                 
+                if(st != 0)
+                {
+                    cout << "st = " << st << endl;
+                    break;
+                }
+
                 int i = 1;
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
@@ -611,22 +685,32 @@ int main()
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
 
                     string realWidth = format_IntWidth(IntWidth(root.real),precision);
-                    string imagWidth = format_IntWidth(IntWidth(root.imag),precision);
-
+                    string imagWidth = format_IntWidth(IntWidth(root.imag),precision);                    
 
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 
-                        << imLeft << ", " << imRight << "]i (w: " << realWidth << ") ?";
+                        << imLeft << ", " << imRight << "]i (w: " << imagWidth << ") ?";
                 }
-                
-                cout << endl;
+
+                cout << "st = 0, it = " << it << "?" <<endl;
                 break;
             }
 
             case IntervalForInterval:
             {
                 vector<Interval<long double>> polynominal = parse_polynom<Interval<long double>>(polynom,arithmetic);
-                vector<complex_interval<Interval<long double>>> result = bairstow_method<Interval<long double>>(polynominal.size() - 1, polynominal,max_iter,p1,p2);
+                if(polynominal.size() < 2 || max_iter < 1 || relative_error <= 0 || zerodet <= 0)
+                {
+                    cout << "st = 1" << endl;
+                    continue;
+                }
+                vector<complex_interval<Interval<long double>>> result = bairstow_method<Interval<long double>>(polynominal.size() - 1, polynominal,max_iter,relative_error,zerodet,st,it,arithmetic);
                 
+                if(st != 0)
+                {
+                    cout << "st = " << st << endl;
+                    break;
+                }
+
                 int i = 1;
                 string reLeft, reRight, imLeft, imRight;
                 for (const auto& root : result)
@@ -640,10 +724,10 @@ int main()
 
 
                     cout << "Root " << i++  <<  " : " << " [" << reLeft << ", " << reRight << "] (w: " << realWidth << ") + [" 
-                        << imLeft << ", " << imRight << "]i (w: " << realWidth << ") ?";
+                        << imLeft << ", " << imRight << "]i (w: " << imagWidth << ") ?";
                 }
 
-                cout << endl;
+                cout << "st = 0, it = " << it <<endl;
 
                 break;
             }
