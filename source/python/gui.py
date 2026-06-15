@@ -12,7 +12,7 @@ class ResultWindow(customtkinter.CTkToplevel):
     def __init__(self, results, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("Wyniki Obliczeń - Metoda Bairstowa")
-        self.geometry("1250x500")
+        self.geometry("1370x500")
         self.minsize(600, 400)
         
         self.after(100, self.lift)
@@ -74,7 +74,7 @@ class ResultWindow(customtkinter.CTkToplevel):
                 card, 
                 text=value_part.strip(), 
                 font=FONT_MONO, 
-                wraplength=1150, 
+                wraplength=1250, 
                 justify="left"
             )
             val.pack(anchor="w", padx=15, pady=(0, 10))
@@ -156,13 +156,13 @@ class App(customtkinter.CTk):
         self.params_frame.grid(row=1, column=1, padx=20, pady=20, sticky="n")
 
        # mit
-        self.mit_label = customtkinter.CTkLabel(self.params_frame, text="mit")
+        self.mit_label = customtkinter.CTkLabel(self.params_frame, text="max_iterations")
         self.mit_label.grid(row=0, column=0, sticky="w", pady=(0, 2))
         self.param1_entry = customtkinter.CTkEntry(self.params_frame, placeholder_text="np. 10", width=120)
         self.param1_entry.grid(row=1, column=0, pady=(0, 10))
 
         # mincorr
-        self.mincorr_label = customtkinter.CTkLabel(self.params_frame, text="mincorr")
+        self.mincorr_label = customtkinter.CTkLabel(self.params_frame, text="relative_error")
         self.mincorr_label.grid(row=2, column=0, sticky="w", pady=(0, 2))
         self.param2_entry = customtkinter.CTkEntry(self.params_frame, placeholder_text="np. 1e-16", width=120)
         self.param2_entry.grid(row=3, column=0, pady=(0, 10))

@@ -152,11 +152,9 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
     vector<T> b_values(coefficients.size());
     vector<T> c_values(coefficients.size());
     
-    // Inicjalizacja domyślnie na błąd limitu iteracji (odpowiednik st=3)
     bool ISi3 = true; 
     int iter = 0;
 
-    // Zmienne z Pascala do śledzenia historii wielkości kroku (odpowiedniki pq0 i pq1)
     long double prev_dr_mag = 1.0e63;
     long double prev_dq_mag = 1.0e63;
 
@@ -177,7 +175,6 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
 
         T denominator = Ar * Bq - Aq * Br;
 
-        // Poprawiony warunek dla dzielenia przez przedział przecinający zero
         bool contains_zero = false;
         if constexpr(is_same_v<T, Interval<long double>>) {
             contains_zero = (denominator.a <= zerodet && denominator.b >= -zerodet);
@@ -199,16 +196,12 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
         T dr = (A_val * Bq - Aq * B_val) * denominator;
         T dq = (Ar * B_val - A_val * Br) * denominator;
 
-
-        // Mierzymy moduł bieżącego kroku
         long double dr_mag, dq_mag;
         
-        // Zmienne dla warunków przedziałowych
         bool function_contains_zero = false;
         bool step_contains_zero = false;
 
         if constexpr(is_same_v<T, Interval<long double>>) {
-            // Bezpieczny moduł - bierzemy maksymalne wychylenie przedziału (najgorszy przypadek)
             dr_mag = std::max(std::abs(dr.a), std::abs(dr.b));
             dq_mag = std::max(std::abs(dq.a), std::abs(dq.b));
             
@@ -235,36 +228,33 @@ newton_output<T> newton(vector<T> coefficients, int max_iterations, long double 
                                  function_contains_zero || 
                                  step_contains_zero;
         } else {
-            // Standardowy warunek dla double (zatrzymaj jeśli błąd jest mały I przestał maleć)
             stop_condition_met = (dr_mag <= relative_error && dq_mag <= relative_error) && 
                                  (dr_mag >= prev_dr_mag || dq_mag >= prev_dq_mag);
         }
 
         if (!stop_condition_met)
         {
-            // Aplikacja kroku Newtona
             r = r - dr;
             q = q - dq;
             
-            // Zapisanie bieżącego kroku do historii
             prev_dr_mag = dr_mag;
             prev_dq_mag = dq_mag;
 
-            // Spłaszczenie przedziałów
             if constexpr (is_same_v<T, Interval<long double>>)
             {
-                long double mid_r = r.Mid();
-                long double mid_q = q.Mid();
                 
-                r.a = mid_r;
-                r.b = mid_r;
-                q.a = mid_q;
-                q.b = mid_q;
+                    long double mid_r = r.Mid();
+                    long double mid_q = q.Mid();
+                    
+                    r.a = mid_r;
+                    r.b = mid_r;
+                    q.a = mid_q;
+                    q.b = mid_q;
+                
             }
         }
         else
         {
-            // Pętla przerywana - osiągnęliśmy precyzję, zero maszynowe lub stagnację
             ISi3 = false;
             break;
         }
@@ -390,7 +380,7 @@ vector<complex_interval<T>> second_degree_roots(vector<T> coefficients)
 
 
 template<typename T>
-vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, int relative_error,long double zerodet, int &st, int &it, int input_type)
+vector<complex_interval<T>> bairstow_method(int degree, vector<T> coefficients, int max_iterations, long double relative_error,long double zerodet, int &st, int &it, int input_type)
 {
     vector<complex_interval<T>> output;
 
@@ -569,13 +559,13 @@ int main()
 
     while (true)
     {
-        int max_iter = 5;
+        int max_iter = 500;
         long double zerodet = 1e-16;
         long double relative_error = 1e-16;
 
         int it = 0;
         int st = 0;
-        const int precision = 1;
+        const int precision = 2;
 
 
 
@@ -601,7 +591,7 @@ int main()
                 if(st != 0)
                 {
                     cout << "st = " << st << endl;
-                    break;
+                    continue;
                 }
                 
                 dbg << "Wektor po sparsowaniu: ";
@@ -674,7 +664,7 @@ int main()
                 if(st != 0)
                 {
                     cout << "st = " << st << endl;
-                    break;
+                    continue;
                 }
 
                 int i = 1;
@@ -683,6 +673,7 @@ int main()
                 {
                     const_cast<Interval<long double>&>(root.real).IEndsToStrings(reLeft, reRight);
                     const_cast<Interval<long double>&>(root.imag).IEndsToStrings(imLeft, imRight);
+                    
 
                     string realWidth = format_IntWidth(IntWidth(root.real),precision);
                     string imagWidth = format_IntWidth(IntWidth(root.imag),precision);                    
@@ -694,6 +685,8 @@ int main()
                 cout << "st = 0, it = " << it << "?" <<endl;
                 break;
             }
+
+            //[0.99,1.01],4 [-5.01,-4.99],2 [3.99,4.01],0
 
             case IntervalForInterval:
             {
@@ -708,7 +701,7 @@ int main()
                 if(st != 0)
                 {
                     cout << "st = " << st << endl;
-                    break;
+                    continue;
                 }
 
                 int i = 1;
